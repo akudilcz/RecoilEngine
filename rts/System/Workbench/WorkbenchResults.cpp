@@ -48,6 +48,15 @@ Json::Value ScenarioToJson(const WorkbenchScenario& scenario, const WorkbenchRun
 		jw["memoryMB"]["peak"] = w.memPeakMB;
 		jw["memoryMB"]["end"] = w.memEndMB;
 		jw["memoryMB"]["growth"] = w.memEndMB - w.memStartMB;
+		jw["timers"] = Json::arrayValue;
+		for (const auto& [name, ms]: w.timersMs) {
+			Json::Value jt;
+			jt["name"] = name;
+			jt["totalMs"] = ms;
+			jt["perSimFrameMs"] = (w.simFrames > 0) ? ms / w.simFrames : 0.0;
+			jt["perDrawFrameMs"] = w.frameMs.empty() ? 0.0 : ms / w.frameMs.size();
+			jw["timers"].append(jt);
+		}
 		root["windows"].append(jw);
 	}
 

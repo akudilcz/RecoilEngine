@@ -272,3 +272,28 @@ TEST_CASE("WriteJsonFile creates missing directories")
 	CHECK(std::filesystem::exists(dir + "/x.json"));
 	std::filesystem::remove_all("wb_test_out", ec);
 }
+
+TEST_CASE("Windows record per-timer time spent inside the window")
+{
+	std::vector<std::pair<std::string, double>> timers = {{"Sim::Path", 10.0}, {"Draw::World", 5.0}};
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.SetTimerSource([&]() { return timers; });
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("s");
+	wb.BeginWindow("w");
+	wb.OnSimFrame(1, 1.0f, 0, false);
+	wb.OnSimFrame(2, 1.0f, 0, false);
+	timers = {{"Sim::Path", 40.0}, {"Draw::World", 5.0}, {"Sim::Unit::Weapon", 3.0}};
+	wb.EndWindow();
+
+	const auto& t = wb.GetScenarios()[0].windows[0].timersMs;
+	REQUIRE(t.size() == 2); // unchanged timers are omitted
+	CHECK(t[0].first == "Sim::Path");
+	CHECK(t[0].second == Catch::Approx(30.0));
+	CHECK(t[1].first == "Sim::Unit::Weapon");
+
+	const Json::Value j = ScenarioToJson(wb.GetScenarios()[0], {});
+	CHECK(j["windows"][0]["timers"][0]["name"].asString() == "Sim::Path");
+	CHECK(j["windows"][0]["timers"][0]["perSimFrameMs"].asDouble() == Catch::Approx(15.0));
+}

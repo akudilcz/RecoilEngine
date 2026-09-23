@@ -4,6 +4,7 @@
 #include "WorkbenchResults.h"
 
 #include <functional>
+#include <unordered_map>
 #include <string>
 #include <vector>
 
@@ -46,6 +47,9 @@ public:
 
 	void SetEngineInfo(const std::string& engineVersion, const std::string& gameName);
 	void SetClockForTest(std::function<float()> clock) { nowFunc = std::move(clock); }
+	// (timer name, accumulated ms) pairs, e.g. from the engine profiler
+	using TimerSource = std::function<std::vector<std::pair<std::string, double>>()>;
+	void SetTimerSource(TimerSource source) { timerSource = std::move(source); }
 
 	bool writeFiles = true;
 
@@ -70,6 +74,8 @@ private:
 	WorkbenchRunInfo info;
 	std::vector<WorkbenchScenario> scenarios;
 	std::function<float()> nowFunc;
+	TimerSource timerSource;
+	std::unordered_map<std::string, double> timerSnapshot;
 };
 
 extern CWorkbench workbench;

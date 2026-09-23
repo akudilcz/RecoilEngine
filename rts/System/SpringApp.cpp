@@ -503,6 +503,18 @@ void SpringApp::ParseCmdLine(int argc, char* argv[])
 		if (out.empty())
 			out = (FLAGS_write_dir.empty() ? std::string(".") : FLAGS_write_dir) + "/workbench";
 		workbench.Configure(FLAGS_workbench, out, FLAGS_workbench_timeout, FLAGS_workbench_profile);
+
+		// per-window subsystem timings; the profiler only records special timers while disabled
+		CTimeProfiler::GetInstance().SetEnabled(true);
+		workbench.SetTimerSource([]() {
+			CTimeProfiler& tp = CTimeProfiler::GetInstance();
+			std::vector<std::pair<std::string, double>> out;
+			tp.ToggleLock(true);
+			for (const auto& [name, rec]: tp.GetSortedProfiles())
+				out.emplace_back(name, tp.GetTimeRecordRaw(name.c_str()).total.toMilliSecsf());
+			tp.ToggleLock(false);
+			return out;
+		});
 	}
 
 	if (FLAGS_gen_fontconfig) {

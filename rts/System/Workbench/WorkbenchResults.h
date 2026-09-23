@@ -2,6 +2,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <json/json.h>
@@ -16,6 +17,8 @@ struct WorkbenchWindow {
 	double memStartMB = 0.0; // process resident memory at the first sample in the window
 	double memPeakMB = 0.0;
 	double memEndMB = 0.0;
+	// engine profiler timers: milliseconds spent inside the window, largest first
+	std::vector<std::pair<std::string, double>> timersMs;
 };
 
 struct WorkbenchCheck {
