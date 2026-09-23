@@ -40,3 +40,20 @@ The direction favours dev on rendering, but at this load and with 3 repetitions 
 | big_battle GPU | 34.43 ms | 32.33 ms | -6.1% | same |
 
 Caveats: base and dev do not simulate identical battles (merged community PRs change behaviour; see determinism above), so part of the `big_battle` sim difference may be a different fight rather than faster code. At 5000 units the frame is sim-bound (~40 ms/frame) and our patches do not move it: that is where the next optimisation work should go. Per-window profiler timings (added after this run) show which subsystems own that time.
+
+## 2026-09-24: where the time goes at 5000 units (`mass_move_5000`, dev, ms per sim frame)
+
+| Subsystem | ms |
+|---|---|
+| Sim (total) | 36.3 |
+| Sim::Unit::MoveType | 19.1 |
+| - CollisionDetection | 7.0 |
+| - UpdateTraversalPlan | 7.0 |
+| - UpdatePreCollisions | 1.7 |
+| CUnitScriptEngine::Tick (unit animation scripts) | 9.2 |
+| Sim::Unit::UpdatePreFrame | 1.9 |
+| Draw (total) | 16.7 |
+| Lua::Callins::Unsynced (BAR widgets) | 7.7 |
+| Draw::Screen | 5.3 |
+
+The two biggest targets for sim optimisation at scale are ground-unit movement (collision detection and traversal planning) and the unit script engine tick; on the draw side, BAR's unsynced Lua callins cost more than the world draw.
