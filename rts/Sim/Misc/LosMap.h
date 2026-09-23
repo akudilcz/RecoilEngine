@@ -25,6 +25,8 @@ public:
 		losmap.clear();
 		losmap.resize(size.x * size.y, 0);
 
+		changeCounter = 0;
+
 		ctrHeightMap = ctrHeightMap_;
 		mipHeightMap = mipHeightMap_;
 
@@ -53,6 +55,11 @@ public:
 	// FIXME temp fix for CBaseGroundDrawer and AI interface, which need raw data
 	const unsigned short& front() const { return losmap.front(); }
 	const auto& GetLosMap() const { return losmap; }
+
+	// Rendering-only helper: bumped whenever losmap contents are modified so
+	// unsynced consumers (e.g. InfoTexture uploads) can skip redundant work
+	// when nothing changed. Never serialized/checksummed; must not affect sync.
+	unsigned int GetChangeCounter() const { return changeCounter; }
 private:
 	void LosAdd(SLosInstance* instance) const;
 	void UnsafeLosAdd(SLosInstance* instance) const;
@@ -65,6 +72,9 @@ protected:
 	int2 LOS2HEIGHT;
 
 	std::vector<unsigned short> losmap;
+
+	// unsynced, rendering-only; deliberately not creg-registered
+	unsigned int changeCounter = 0;
 
 	const float* ctrHeightMap = nullptr;
 	const float* mipHeightMap = nullptr;

@@ -1896,7 +1896,6 @@ float3 CGroundMoveType::GetObstacleAvoidanceDir(const float3& desiredDir) {
 
 	for (const CSolidObject* avoidee: *qfQuery.solids) {
 		const MoveDef* avoideeMD = avoidee->moveDef;
-		const UnitDef* avoideeUD = dynamic_cast<const UnitDef*>(avoidee->GetDef());
 
 		// cases in which there is no need to avoid this obstacle
 		if (avoidee == owner)
@@ -1911,6 +1910,10 @@ float3 CGroundMoveType::GetObstacleAvoidanceDir(const float3& desiredDir) {
 			continue;
 		if (!CMoveMath::CrushResistant(*avoiderMD, avoidee))
 			continue;
+
+		// only needed from here on, so skip the (relatively expensive) RTTI
+		// lookup for obstacles rejected by the cheap checks above
+		const UnitDef* avoideeUD = dynamic_cast<const UnitDef*>(avoidee->GetDef());
 
 		const bool avoideeMobile  = (avoideeMD != nullptr);
 		const bool avoideeMovable = (avoideeUD != nullptr && !static_cast<const CUnit*>(avoidee)->moveType->IsPushResistant());

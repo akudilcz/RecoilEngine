@@ -1273,7 +1273,7 @@ bool SpringApp::MainEventHandler(const SDL_Event& event)
 
 		} break;
 		case SDL_KEYDOWN: {
-			KeyInput::Update(keyBindings.GetFakeMetaKey());
+			KeyInput::Update(keyBindings.GetFakeMetaKey(), event.key.keysym.mod);
 
 			if (activeController != nullptr) {
 				int keyCode = CKeyCodes::GetNormalizedSymbol(event.key.keysym.sym);
@@ -1288,7 +1288,7 @@ bool SpringApp::MainEventHandler(const SDL_Event& event)
 
 		} break;
 		case SDL_KEYUP: {
-			KeyInput::Update(keyBindings.GetFakeMetaKey());
+			KeyInput::Update(keyBindings.GetFakeMetaKey(), event.key.keysym.mod);
 
 			if (activeController != nullptr) {
 				gameTextInput.ignoreNextChar = false;

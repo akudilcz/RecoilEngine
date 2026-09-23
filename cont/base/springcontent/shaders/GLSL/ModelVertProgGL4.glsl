@@ -92,6 +92,28 @@ layout(std140, binding = 0) readonly buffer TransformBuffer {
 	Transform transforms[];
 };
 
+// mirrors the layout of the C++ ModelUniformData struct (Rendering/Models/ModelsMemStorageDefs.h)
+struct ModelUniformData {
+	uint composite1; // drawFlag, unused1, id
+	uint composite2; // teamID, unused2, unused3
+	uint unused4;
+	uint unused5;
+
+	float maxHealth;
+	float health;
+	float buildProgress;   // [0,1] for units under construction, 1.0 otherwise
+	float modelDrawHeight; // unit->model->CalcDrawHeight(), only meaningful together with buildProgress
+
+	vec4 drawPos;
+	vec4 speed;
+
+	vec4 userDefined[4];
+};
+
+layout(std140, binding = 1) readonly buffer ModelUniformsBuffer {
+	ModelUniformData modelUniforms[];
+};
+
 uniform int cameraMode = 0;
 uniform int matrixMode = 0;
 
@@ -100,6 +122,53 @@ uniform mat4 staticModelMatrix = mat4(1.0);
 uniform vec4 clipPlane0 = vec4(0.0, 0.0, 0.0, 1.0); //upper construction clip plane
 uniform vec4 clipPlane1 = vec4(0.0, 0.0, 0.0, 1.0); //lower construction clip plane
 uniform vec4 clipPlane2 = vec4(0.0, 0.0, 0.0, 1.0); //water clip plane
+
+// -1 := regular rendering, use clipPlane0/1 as-is (default)
+//  0/1/2 := batched units-being-built pass (wire/flat/fill stage); construction
+//  clip planes are derived per-instance from ModelUniformsBuffer[instData.y]
+uniform int buildStage = -1;
+
+// reproduces CUnitDrawerGL4::DrawUnitModelBeingBuilt{Shadow,Opaque}() per-unit clip
+// plane math (UnitDrawer.cpp), but evaluated per-instance so a whole batch of
+// units-being-built can be submitted (and clipped) in a single draw call
+void GetConstructionClipDistances(vec4 modelPos, uint uniIndex, out float clip0, out float clip1) {
+	if (buildStage < 0) {
+		clip0 = dot(modelPos, clipPlane0);
+		clip1 = dot(modelPos, clipPlane1);
+		return;
+	}
+
+	float H = modelUniforms[uniIndex].modelDrawHeight;
+	float P = modelUniforms[uniIndex].buildProgress;
+
+	if (buildStage == 0) {
+		// wireframe stage: unconditional
+		clip0 = dot(modelPos, vec4(0.0, -1.0, 0.0,  H * ( P * 3.0             )));
+		clip1 = dot(modelPos, vec4(0.0,  1.0, 0.0, -H * ( P * 10.0 - 9.0      )));
+		return;
+	}
+
+	if (buildStage == 1) {
+		// flat-colored stage: only visible once more than 1/3 built, otherwise fully clipped
+		if (P <= (1.0 / 3.0)) {
+			clip0 = -1.0;
+			clip1 = -1.0;
+			return;
+		}
+
+		clip0 = dot(modelPos, vec4(0.0, -1.0, 0.0,  H * ( P * 3.0 - 1.0)));
+		clip1 = dot(modelPos, vec4(0.0,  1.0, 0.0, -H * ( P * 3.0 - 2.0)));
+		return;
+	}
+
+	// fully-shaded stage: only drawn once more than 2/3 built (otherwise fully clipped), and
+	// even then only clipped against the FLAT stage's upper bound (reproducing the legacy
+	// per-unit code, which reuses upperPlanes[BUILDSTAGE_FLAT] here to only re-shade the
+	// portion of the model above where the flat-colored pass already stopped). clip1 is left
+	// unused: CLIP_DISTANCE1 stays disabled on the CPU side for this stage
+	clip0 = (P > (2.0 / 3.0)) ? dot(modelPos, vec4(0.0, -1.0, 0.0, H * (P * 3.0 - 1.0))) : -1.0;
+	clip1 = 1.0;
+}
 
 uniform float teamColorAlpha = 1.0;
 
@@ -356,8 +425,7 @@ void main(void)
 		worldNormal = ApplyTransform(tx, modelNormal);
 	}
 
-	gl_ClipDistance[0] = dot(modelPos, clipPlane0); //upper construction clip plane
-	gl_ClipDistance[1] = dot(modelPos, clipPlane1); //lower construction clip plane
+	GetConstructionClipDistances(modelPos, instData.y, gl_ClipDistance[0], gl_ClipDistance[1]);
 	gl_ClipDistance[2] = dot(worldPos, clipPlane2); //water clip plane
 
 	uint paletteIndex = instData.z & 0x07FFu; // mask 11 bits: 0..254 = team, 256..2047 = custom

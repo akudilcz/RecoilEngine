@@ -7,7 +7,9 @@
 #include <set>
 
 namespace KeyInput {
-	void Update(int fakeMetaKey);
+	// eventKeyMods: modifier state carried by the SDL key event being handled (keysym.mod);
+	// -1 samples the live SDL state instead
+	void Update(int fakeMetaKey, int eventKeyMods = -1);
 	void ReleaseAllKeys();
 
 	bool IsKeyPressed(int idx);

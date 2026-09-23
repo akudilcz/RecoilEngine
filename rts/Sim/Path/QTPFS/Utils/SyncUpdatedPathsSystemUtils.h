@@ -1,6 +1,8 @@
 #ifndef SYNC_UPDATED_PATHS_SYSTEM_UTILS_H_
 #define SYNC_UPDATED_PATHS_SYSTEM_UTILS_H_
 
+#include <utility>
+
 #include "Sim/Path/QTPFS/Registry.h"
 
 namespace QTPFS {
@@ -12,8 +14,11 @@ namespace QTPFS {
 	{
         auto completePath = [pm](QTPFS::entity pathEntity, IPath* path){
 
-            // Transfer search update path, to the simulation-visible path.
-            (*path) = std::move(registry.get<SearchModeIPath>(pathEntity));
+            // Transfer search update path, to the simulation-visible path. A swap (rather than a
+            // move) is used so the now-stale live-path buffers land back in the SearchModeIPath
+            // slot instead of being left empty; PrepareSearchForFinalize's copy into that slot on
+            // the path's next search can then reuse that capacity instead of reallocating.
+            std::swap(*path, static_cast<IPath&>(registry.get<SearchModeIPath>(pathEntity)));
 
             // inform the movement system that the path has been changed.
             if (registry.all_of<PathUpdatedCounterIncrease>(pathEntity)) {

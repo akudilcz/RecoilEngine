@@ -417,6 +417,10 @@ private:
 	spring::unordered_set<std::string> glExtensions;
 	// double-buffered; results from frame N become available on frame N+1
 	std::array<uint32_t, NUM_OPENGL_TIMER_QUERIES * 2> glTimerQueries;
+	// last successfully retrieved GL timer-query delta (nanoseconds); returned
+	// by CalcGLDeltaTime when the current query result is not available yet,
+	// so callers never block waiting on the GPU
+	mutable uint64_t lastGLDeltaTime = 0;
 private:
 	static constexpr inline const char* xsKeys[2] = { "XResolutionWindowed", "XResolution" };
 	static constexpr inline const char* ysKeys[2] = { "YResolutionWindowed", "YResolution" };

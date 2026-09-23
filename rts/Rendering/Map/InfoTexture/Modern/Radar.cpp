@@ -98,10 +98,58 @@ CRadarTexture::~CRadarTexture()
 	shaderHandler->ReleaseProgramObject("[CRadarTexture]", "CRadarTexture");
 }
 
+static inline int RadarJammerAllyTeam()
+{
+	return modInfo.separateJammers ? gu->myAllyTeam : 0;
+}
+
+
+bool CRadarTexture::IsUpdateNeeded()
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	if (!everUpdated)
+		return true;
+
+	// don't bother refreshing textures nobody has sampled recently (e.g. an
+	// info-texture mode that isn't currently active/composited); GetTexture()
+	// force-updates on demand, so this can never hand out stale data.
+	if ((spring_gettime() - lastUsage).toSecsi() > 2)
+		return false;
+
+	const bool globalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
+
+	if (globalLos != lastGlobalLos)
+		return true;
+	if (globalLos)
+		return false;
+
+	const int jammerAllyTeam = RadarJammerAllyTeam();
+
+	return (losHandler->radar.losMaps[gu->myAllyTeam].GetChangeCounter() != lastRadarCounter) ||
+	       (losHandler->jammer.losMaps[jammerAllyTeam].GetChangeCounter() != lastJammerCounter);
+}
+
+
+GLuint CRadarTexture::GetTexture()
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	lastUsage = spring_gettime();
+
+	// only record usage here: Update() binds its own FBO and viewport and could be
+	// reached mid-draw (e.g. Lua sampling $info:*), so staleness after an idle period
+	// is resolved by the next regular update instead of an on-demand one
+
+	return CModernInfoTexture::GetTexture();
+}
+
+
 void CRadarTexture::Update()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (losHandler->GetGlobalLOS(gu->myAllyTeam)) {
+	everUpdated = true;
+	lastGlobalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
+
+	if (lastGlobalLos) {
 		fbo.Bind();
 		glViewport(0, 0, texSize.x, texSize.y);
 		glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
@@ -114,7 +162,10 @@ void CRadarTexture::Update()
 		return;
 	}
 
-	const int jammerAllyTeam = modInfo.separateJammers ? gu->myAllyTeam : 0;
+	const int jammerAllyTeam = RadarJammerAllyTeam();
+
+	lastRadarCounter  = losHandler->radar.losMaps[gu->myAllyTeam].GetChangeCounter();
+	lastJammerCounter = losHandler->jammer.losMaps[jammerAllyTeam].GetChangeCounter();
 
 	const auto& myRadar  = losHandler->radar.losMaps[gu->myAllyTeam].GetLosMap();
 	const auto& myJammer = losHandler->jammer.losMaps[jammerAllyTeam].GetLosMap();

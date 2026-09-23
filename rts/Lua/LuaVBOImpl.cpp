@@ -651,7 +651,7 @@ size_t LuaVBOImpl::Upload(const sol::stack_table& luaTblData, sol::optional<int>
 		LuaUtils::SolLuaError("[LuaVBOImpl::%s] Invalid luaStartIndex [%u] is greater than luaFinishIndex [%u]", __func__, luaStartIndex, luaFinishIndex);
 	}
 
-	std::vector<lua_Number> dataVec;
+	static std::vector<lua_Number> dataVec;
 	dataVec.resize(luaFinishIndex - luaStartIndex + 1);
 
 	constexpr auto defaultValue = static_cast<lua_Number>(0);

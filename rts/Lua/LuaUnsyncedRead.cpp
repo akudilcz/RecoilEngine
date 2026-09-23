@@ -46,6 +46,7 @@
 #include "Rendering/Units/UnitDrawer.h"
 #include "Rendering/Features/FeatureDrawer.h"
 #include "Rendering/IconHandler.h"
+#include "Sim/Misc/GlobalSynced.h"
 #include "Sim/Features/Feature.h"
 #include "Sim/Features/FeatureDef.h"
 #include "Sim/Features/FeatureHandler.h"
@@ -2067,6 +2068,53 @@ public:
  * @param icons boolean? (Default: `true`)
  * @return UnitID[]? unitIDs
  */
+// per-draw-frame cache of the last computed GetVisibleUnits() result, keyed
+// on every input that can affect it; this only saves the C++-side scan, each
+// call still builds and returns its own fresh Lua table (same contents/order)
+struct GetVisibleUnitsCacheKey {
+	unsigned int drawFrame = 0;
+	int simFrame = 0; // units can be created/destroyed/change LOS between draw frames
+	int teamID = 0;
+	int allyTeamID = 0;
+	bool noIcons = false;
+	bool fullRead = false;
+	float radiusMult = 0.0f;
+	float testRadius = 0.0f;
+	float3 camPos;
+	float3 camForward;
+	float4 camScales;
+	std::array<float4, 6> camPlanes;
+
+	static bool Float4Eq(const float4& a, const float4& b) {
+		return (a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w);
+	}
+
+	bool operator == (const GetVisibleUnitsCacheKey& o) const {
+		if (
+			   drawFrame   != o.drawFrame
+			|| simFrame    != o.simFrame
+			|| teamID      != o.teamID
+			|| allyTeamID  != o.allyTeamID
+			|| noIcons     != o.noIcons
+			|| fullRead    != o.fullRead
+			|| radiusMult  != o.radiusMult
+			|| testRadius  != o.testRadius
+			|| camPos      != o.camPos
+			|| camForward  != o.camForward
+			|| !Float4Eq(camScales, o.camScales)
+		) {
+			return false;
+		}
+
+		for (size_t i = 0; i < camPlanes.size(); i++) {
+			if (!Float4Eq(camPlanes[i], o.camPlanes[i]))
+				return false;
+		}
+
+		return true;
+	}
+};
+
 int LuaUnsyncedRead::GetVisibleUnits(lua_State* L)
 {
 	// arg 1 - teamID
@@ -2089,8 +2137,11 @@ int LuaUnsyncedRead::GetVisibleUnits(lua_State* L)
 
 		allyTeamID = teamHandler.AllyTeam(teamID);
 	}
+
+	const bool fullRead = CLuaHandle::GetHandleFullRead(L);
+
 	if (allyTeamID < 0) {
-		if (!CLuaHandle::GetHandleFullRead(L)) {
+		if (!fullRead) {
 			return 0;
 		}
 	}
@@ -2107,50 +2158,83 @@ int LuaUnsyncedRead::GetVisibleUnits(lua_State* L)
 		testRadius = std::max(testRadius, -testRadius);
 	}
 
-	static CVisUnitQuadDrawer unitQuadIter;
+	GetVisibleUnitsCacheKey key;
+	key.drawFrame  = globalRendering->drawFrame;
+	key.simFrame   = gs->frameNum;
+	key.teamID     = teamID;
+	key.allyTeamID = allyTeamID;
+	key.noIcons    = noIcons;
+	key.fullRead   = fullRead;
+	key.radiusMult = radiusMult;
+	key.testRadius = testRadius;
+	key.camPos     = camera->GetPos();
+	key.camForward = camera->GetForward();
+	key.camScales  = camera->GetFrustumScales();
+	for (size_t i = 0; i < key.camPlanes.size(); i++) {
+		key.camPlanes[i] = camera->GetFrustumPlane(i);
+	}
 
-	unitQuadIter.ResetState();
-	readMap->GridVisibility(nullptr, &unitQuadIter, 1e9, CQuadField::BASE_QUAD_SIZE / SQUARE_SIZE);
+	static GetVisibleUnitsCacheKey cacheKey;
+	static std::vector<int> cachedUnitIDs;
+	static bool cacheValid = false;
 
-	// Even though we're in unsynced it's ok to use gs->tempNum since its exact value
-	// doesn't matter
-	const int tempNum = gs->GetTempNum();
-	lua_createtable(L, unitQuadIter.GetObjectCount(), 0);
+	if (!cacheValid || !(cacheKey == key)) {
+		static CVisUnitQuadDrawer unitQuadIter;
+
+		unitQuadIter.ResetState();
+		readMap->GridVisibility(nullptr, &unitQuadIter, 1e9, CQuadField::BASE_QUAD_SIZE / SQUARE_SIZE);
+
+		// Even though we're in unsynced it's ok to use gs->tempNum since its exact value
+		// doesn't matter
+		const int tempNum = gs->GetTempNum();
+
+		cachedUnitIDs.clear();
+		cachedUnitIDs.reserve(unitQuadIter.GetObjectCount());
+
+		for (auto visUnitList: unitQuadIter.GetObjectLists()) {
+			for (CUnit* u: *visUnitList) {
+				if (u->tempNum == tempNum)
+					continue;
+
+				u->tempNum = tempNum;
+
+				if (u->noDraw)
+					continue;
+
+				if (allyTeamID >= 0 && !(u->losStatus[allyTeamID] & LOS_INLOS))
+					continue;
+
+				if (noIcons && u->GetIsIcon())
+					continue;
+
+				if ((teamID == LuaUtils::AllyUnits)  && (allyTeamID != u->allyteam))
+					continue;
+
+				if ((teamID == LuaUtils::EnemyUnits) && (allyTeamID == u->allyteam))
+					continue;
+
+				if ((teamID >= 0) && (teamID != u->team))
+					continue;
+
+				//No check for AllUnits, since there's no need.
+
+				if (!camera->InView(u->drawMidPos, testRadius + (u->GetDrawRadius() * radiusMult)))
+					continue;
+
+				cachedUnitIDs.push_back(u->id);
+			}
+		}
+
+		cacheKey = key;
+		cacheValid = true;
+	}
+
+	lua_createtable(L, cachedUnitIDs.size(), 0);
 
 	unsigned int count = 0;
-	for (auto visUnitList: unitQuadIter.GetObjectLists()) {
-		for (CUnit* u: *visUnitList) {
-			if (u->tempNum == tempNum)
-				continue;
-
-			u->tempNum = tempNum;
-
-			if (u->noDraw)
-				continue;
-
-			if (allyTeamID >= 0 && !(u->losStatus[allyTeamID] & LOS_INLOS))
-				continue;
-
-			if (noIcons && u->GetIsIcon())
-				continue;
-
-			if ((teamID == LuaUtils::AllyUnits)  && (allyTeamID != u->allyteam))
-				continue;
-
-			if ((teamID == LuaUtils::EnemyUnits) && (allyTeamID == u->allyteam))
-				continue;
-
-			if ((teamID >= 0) && (teamID != u->team))
-				continue;
-
-			//No check for AllUnits, since there's no need.
-
-			if (!camera->InView(u->drawMidPos, testRadius + (u->GetDrawRadius() * radiusMult)))
-				continue;
-
-			lua_pushnumber(L, u->id);
-			lua_rawseti(L, -2, ++count);
-		}
+	for (const int unitID: cachedUnitIDs) {
+		lua_pushnumber(L, unitID);
+		lua_rawseti(L, -2, ++count);
 	}
 
 	return 1;
@@ -2551,13 +2635,13 @@ int LuaUnsyncedRead::GetUnitsInScreenRectangle(lua_State* L)
 		uint32_t count = 0;
 		for (auto visUnitList : unitQuadIter.GetObjectLists()) {
 			for (CUnit* unit : *visUnitList) {
-				if (disqualifier(unit))
-					continue;
-
 				if (unit->tempNum == tempNum)
 					continue;
 
 				unit->tempNum = tempNum;
+
+				if (disqualifier(unit))
+					continue;
 
 				const float3 vpPos = camera->CalcViewPortCoordinates(unit->drawPos);
 

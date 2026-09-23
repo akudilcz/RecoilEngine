@@ -85,6 +85,12 @@ private:
 	// char instead of bool, accessors to different elements must be thread-safe
 	std::vector<uint8_t> patchVisFlags[MESH_COUNT];
 
+	// reused across Update() calls to avoid a per-frame heap allocation
+	std::vector<bool> patchesToTesselate[MESH_COUNT];
+	// indices of dirty (heightmap-changed) visible patches queued for a
+	// parallel ComputeVariance() pass; reused across Update() calls
+	std::vector<int> dirtyPatchIndices[MESH_COUNT];
+
 	// whether tessellation should be forcibly performed next frame
 	static bool forceNextTesselation[MESH_COUNT];
 

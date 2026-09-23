@@ -7,6 +7,7 @@
 
 #include "SMFMapFile.h"
 #include "Map/ReadMap.h"
+#include "Rendering/GL/PBO.h"
 #include "System/EventClient.h"
 #include "System/type2.h"
 
@@ -230,6 +231,10 @@ private:
 
 	MapTexture heightMapTexture;
 private:
+	// persistent PBO reused for partial heightmap-texture updates, grown as
+	// needed instead of being (re)allocated for every updated rectangle
+	PBO heightMapUpdatePBO;
+
 	float texAnisotropyLevels[2] = {0.0f, 0.0f};
 
 	bool haveSpecularTexture           = false;

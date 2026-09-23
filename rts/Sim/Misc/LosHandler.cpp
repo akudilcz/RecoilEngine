@@ -121,6 +121,7 @@ void ILosType::Kill()
 	delayedTerraQue.clear();
 	losUpdate.clear();
 	losCache.clear();
+	losCacheLiveCount = 0;
 
 	losRemove.clear();
 	losAdd.clear();
@@ -311,11 +312,16 @@ inline void ILosType::RefInstance(SLosInstance* li)
 		return;
 
 	if (li->isCached) {
-		// reactivate cached instance
+		// reactivate cached instance; lazily unlink it from losCache instead
+		// of an O(n) find+erase from the middle of the deque -- it is simply
+		// marked non-cached here and physically dropped once it reaches the
+		// front of losCache (see Update()/UpdateHeightMapSynced()), which
+		// leaves the relative order (and thus eviction choice) of the
+		// remaining, still-cached entries unchanged
 		cacheRefs += (algoType == LOS_ALGO_RAYCAST);
-		auto it = std::find(losCache.begin(), losCache.end(), li);
 		li->isCached = false;
-		losCache.erase(it);
+		assert(losCacheLiveCount > 0);
+		--losCacheLiveCount;
 	}
 
 	UpdateInstanceStatus(li, SLosInstance::TLosStatus::REACTIVATE);
@@ -355,6 +361,7 @@ inline void ILosType::AddInstanceToCache(SLosInstance* li)
 
 	li->isCached = true;
 	losCache.push_back(li);
+	++losCacheLiveCount;
 }
 
 
@@ -592,10 +599,23 @@ void ILosType::Update()
 
 	// delete / move to cache unused instances
 	if (algoType == LOS_ALGO_RAYCAST) {
-		while (!losCache.empty() && ((losCache.size() + losDeleted.size()) > CACHE_SIZE)) {
+		// losCacheLiveCount (not losCache.size()) reflects how many entries
+		// are still actually cached; losCache may also hold stale entries
+		// (reactivated via RefInstance) that get discarded here for free as
+		// they reach the front, without affecting which live entries get
+		// evicted or in what order
+		while (!losCache.empty() && ((losCacheLiveCount + losDeleted.size()) > CACHE_SIZE)) {
 			SLosInstance* li = losCache.front();
 			losCache.pop_front();
+
+			if (!li->isCached) {
+				// already reactivated elsewhere; just drop the stale entry
+				continue;
+			}
+
 			li->isCached = false;
+			assert(losCacheLiveCount > 0);
+			--losCacheLiveCount;
 			DeleteInstance(li);
 		}
 
@@ -640,6 +660,9 @@ void ILosType::UpdateHeightMapSynced(SRectangle rect)
 	};
 
 	// delete unused instances that overlap with the changed rectangle
+	// (li->refCount > 0 also covers stale/reactivated entries left in place
+	// by the lazy deletion in RefInstance -- reactivation always sets
+	// refCount to 1 before clearing isCached, so they are skipped here too)
 	for (auto it = losCache.begin(); it != losCache.end();) {
 		SLosInstance* li = *it;
 		if (li->refCount > 0 || !CheckOverlap(li, rect)) {
@@ -649,6 +672,8 @@ void ILosType::UpdateHeightMapSynced(SRectangle rect)
 
 		it = losCache.erase(it);
 		li->isCached = false;
+		assert(losCacheLiveCount > 0);
+		--losCacheLiveCount;
 		DeleteInstance(li);
 	}
 

@@ -84,10 +84,49 @@ CAirLosTexture::~CAirLosTexture()
 	shaderHandler->ReleaseProgramObject("[CAirLosTexture]", "CAirLosTexture");
 }
 
+bool CAirLosTexture::IsUpdateNeeded()
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	if (!everUpdated)
+		return true;
+
+	// don't bother refreshing textures nobody has sampled recently (e.g. an
+	// info-texture mode that isn't currently active/composited); GetTexture()
+	// force-updates on demand, so this can never hand out stale data.
+	if ((spring_gettime() - lastUsage).toSecsi() > 2)
+		return false;
+
+	const bool globalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
+
+	if (globalLos != lastGlobalLos)
+		return true;
+	if (globalLos)
+		return false;
+
+	return (losHandler->airLos.losMaps[gu->myAllyTeam].GetChangeCounter() != lastAirLosCounter);
+}
+
+
+GLuint CAirLosTexture::GetTexture()
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	lastUsage = spring_gettime();
+
+	// only record usage here: Update() binds its own FBO and viewport and could be
+	// reached mid-draw (e.g. Lua sampling $info:*), so staleness after an idle period
+	// is resolved by the next regular update instead of an on-demand one
+
+	return CModernInfoTexture::GetTexture();
+}
+
+
 void CAirLosTexture::Update()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (losHandler->GetGlobalLOS(gu->myAllyTeam)) {
+	everUpdated = true;
+	lastGlobalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
+
+	if (lastGlobalLos) {
 		fbo.Bind();
 		glViewport(0, 0, texSize.x, texSize.y);
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -99,6 +138,8 @@ void CAirLosTexture::Update()
 		texture.ProduceMipmaps();
 		return;
 	}
+
+	lastAirLosCounter = losHandler->airLos.losMaps[gu->myAllyTeam].GetChangeCounter();
 
 	const auto& myAirLos = losHandler->airLos.losMaps[gu->myAllyTeam].GetLosMap();
 	{

@@ -8,6 +8,7 @@
 
 #include "Game/UI/CursorIcons.h"
 #include "Rendering/GL/myGL.h"
+#include "Rendering/GL/VertexArrayTypes.h"
 
 class CLineDrawer {
 	public:
@@ -18,7 +19,7 @@ class CLineDrawer {
 
 		void SetupLineStipple();
 		void UpdateLineStipple();
-		               
+
 		void StartPath(const float3& pos, const float* color);
 		void FinishPath() const;
 		void DrawLine(const float3& endPos, const float* color);
@@ -39,21 +40,17 @@ class CLineDrawer {
 		bool useRestartColor;
 		float restartAlpha;
 		const float* restartColor;
-		
+
 		float3 lastPos;
 		const float* lastColor;
-		
+
 		float stippleTimer;
 
-		// queue all lines and draw them in one go later
-		struct LinePair {
-			GLenum type;
-			std::vector<GLfloat> verts;
-			std::vector<GLfloat> colors;
-		};
-
-		std::vector<LinePair> lines;
-		std::vector<LinePair> stippled;
+		// queue all line segments (as independent GL_LINES pairs) and draw
+		// each list in a single batched call later; storage persists across
+		// frames (only cleared, never freed) to avoid reallocating every frame
+		std::vector<VA_TYPE_C> lineVerts;
+		std::vector<VA_TYPE_C> stippledVerts;
 };
 
 
@@ -90,28 +87,9 @@ inline void CLineDrawer::Break(const float3& endPos, const float* color)
 
 inline void CLineDrawer::Restart()
 {
-	LinePair *ptr;
-	if (lineStipple) {
-		stippled.push_back(LinePair());
-		ptr = &stippled.back();
-	} else {
-		lines.push_back(LinePair());
-		ptr = &lines.back();
-	}
-	LinePair& p = *ptr;
-
-	if (!useColorRestarts)	 {
-		p.type = GL_LINE_STRIP;
-		p.colors.push_back(lastColor[0]);
-		p.colors.push_back(lastColor[1]);
-		p.colors.push_back(lastColor[2]);
-		p.colors.push_back(lastColor[3]);
-		p.verts.push_back(lastPos[0]);
-		p.verts.push_back(lastPos[1]);
-		p.verts.push_back(lastPos[2]);
-	} else {
-		p.type = GL_LINES;
-	}
+	// nothing to do: segments are stored flat and independent of each other
+	// (GL_LINES pairs), so a new path simply starts from lastPos/lastColor
+	// without needing to open a new strip/list entry
 }
 
 
@@ -140,45 +118,19 @@ inline void CLineDrawer::StartPath(const float3& pos, const float* color)
 
 inline void CLineDrawer::DrawLine(const float3& endPos, const float* color)
 {
-	LinePair *ptr;
-	if (lineStipple) {
-		ptr = &stippled.back();
-	} else {
-		ptr = &lines.back();
-	}
-	LinePair& p = *ptr;
+	std::vector<VA_TYPE_C>& verts = lineStipple ? stippledVerts : lineVerts;
 
 	if (!useColorRestarts) {
-		p.colors.push_back(color[0]);
-		p.colors.push_back(color[1]);
-		p.colors.push_back(color[2]);
-		p.colors.push_back(color[3]);
-		p.verts.push_back(endPos.x);
-		p.verts.push_back(endPos.y);
-		p.verts.push_back(endPos.z);
+		verts.emplace_back(VA_TYPE_C{ lastPos, SColor(lastColor) });
+		verts.emplace_back(VA_TYPE_C{ endPos , SColor(color) });
 	} else {
 		if (useRestartColor) {
-			p.colors.push_back(restartColor[0]);
-			p.colors.push_back(restartColor[1]);
-			p.colors.push_back(restartColor[2]);
-			p.colors.push_back(restartColor[3]);
+			verts.emplace_back(VA_TYPE_C{ lastPos, SColor(restartColor) });
 		} else {
-			p.colors.push_back(color[0]);
-			p.colors.push_back(color[1]);
-			p.colors.push_back(color[2]);
-			p.colors.push_back(color[3] * restartAlpha);
+			const float startColor[4] = { color[0], color[1], color[2], color[3] * restartAlpha };
+			verts.emplace_back(VA_TYPE_C{ lastPos, SColor(startColor) });
 		}
-		p.verts.push_back(lastPos.x);
-		p.verts.push_back(lastPos.y);
-		p.verts.push_back(lastPos.z);
-
-		p.colors.push_back(color[0]);
-		p.colors.push_back(color[1]);
-		p.colors.push_back(color[2]);
-		p.colors.push_back(color[3]);
-		p.verts.push_back(endPos.x);
-		p.verts.push_back(endPos.y);
-		p.verts.push_back(endPos.z);
+		verts.emplace_back(VA_TYPE_C{ endPos, SColor(color) });
 	}
 
 	lastPos = endPos;

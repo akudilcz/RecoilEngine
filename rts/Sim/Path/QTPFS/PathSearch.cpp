@@ -274,8 +274,7 @@ void QTPFS::PathSearch::InitializeThread(SearchThreadData* threadData, IPath* pa
 		data.openNodes = &searchThreadData->openNodes[i];
 		data.minSearchNode = data.srcSearchNode;
 
-		while (!data.openNodes->empty())
-			data.openNodes->pop();
+		// searchThreadData->Init() above already cleared these queues via ResetQueue().
 	}
 
 	// Set search boundaries for path repairs. If a repair cannot be made within the boundaries then the path is better
@@ -1727,19 +1726,10 @@ bool isPresent(const L& list, const QTPFS::SearchNode& node) {
 
 void QTPFS::PathSearch::TracePath(IPath* path) {
 	RECOIL_DETAILED_TRACY_ZONE;
-	struct TracePoint{
-		float3 point;
-		uint32_t nodeId;
-		uint32_t nodeNumber;
-		int xmin;
-		int zmin;
-		int xmax;
-		int zmax;
-		bool isBad = false;
-		float dist = 0.f;
-		uint32_t index = 0;
-	};
-	std::deque<TracePoint> points;
+	// Reuse the per-thread buffer instead of allocating a fresh deque every search; it is cleared
+	// up-front so the point sequence built below is identical to using a fresh, empty container.
+	std::deque<TracePoint>& points = searchThreadData->tracePoints;
+	points.clear();
 	int nodesWithoutPoints = 0;
 
 	auto& fwd = directionalSearchData[SearchThreadData::SEARCH_FORWARD];
