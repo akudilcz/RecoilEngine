@@ -504,10 +504,12 @@ void SpringApp::ParseCmdLine(int argc, char* argv[])
 			out = (FLAGS_write_dir.empty() ? std::string(".") : FLAGS_write_dir) + "/workbench";
 		workbench.Configure(FLAGS_workbench, out, FLAGS_workbench_timeout, FLAGS_workbench_profile);
 
-		// per-window subsystem timings; the profiler only records special timers while disabled
-		CTimeProfiler::GetInstance().SetEnabled(true);
+		// per-window subsystem timings; the profiler only records special timers while disabled,
+		// and CTimeProfiler::ResetState (startup, thread pool resize) disables it again, so the
+		// source (re)enables it each time a window opens or closes
 		workbench.SetTimerSource([]() {
 			CTimeProfiler& tp = CTimeProfiler::GetInstance();
+			tp.SetEnabled(true);
 			std::vector<std::pair<std::string, double>> out;
 			tp.ToggleLock(true);
 			for (const auto& [name, rec]: tp.GetSortedProfiles())
