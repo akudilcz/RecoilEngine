@@ -20,7 +20,7 @@ python tools/workbench/run.py --suite smoke --engine dev=C:/Workspace/bar/engine
     --data-dir C:/Workspace/bar/data
 ```
 
-Suites: `smoke` (the default), `standard` (adds every mobile unit's movement checks) and `determinism` (`sync_repro`; use with `--spectate --seed N`). `--only <globs>` runs any scenarios by name instead.
+Suites: `smoke` (the default), `standard` (adds every mobile unit's movement checks), `full` (adds every armed unit's weapon range; hours) and `determinism` (`sync_repro`; use with `--spectate --seed N`). `--only <globs>` runs any scenarios by name instead.
 
 Compare two builds (the first engine is the baseline):
 
@@ -94,7 +94,7 @@ return {
 }
 ```
 
-`ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSeconds(s)`, `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)` (fire and forget), `call(fn, ...) -> value | nil, err` (runs a synced function and waits for its return value), `log(msg)`.
+`ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSeconds(s)`, `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)` (fire and forget), `call(fn, ...) -> value | nil, err` (runs a synced function and waits for its return value), `atNextGameFrame(fn)` (runs fn during the next sim step, before the GUI update; use it for emulated input that must land where physical input does), `log(msg)`.
 
 `ctx.call` never raises: Lua 5.1 cannot yield inside `pcall`, so check its second return value instead. Read enemy or hidden state through `ctx.call` rather than unsynced Lua, which only sees what the local player can see.
 
