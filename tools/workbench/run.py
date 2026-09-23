@@ -16,9 +16,9 @@ Cell = collections.namedtuple("Cell", "engine exe profile rep")
 # named scenario sets; --only overrides
 SUITES = {
     "smoke": "api_selftest,render_baseline,mass_move_500,weapon_range,ui_lowfps",   # ~12 min
-    "standard": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,unit_movement,ship_movement,unit_behaviours",
+    "standard": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",
     "determinism": "sync_repro",  # use with --spectate --seed N
-    "full": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,unit_movement,ship_movement,unit_behaviours",  # hours
+    "full": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",  # hours
     "render": "render_baseline,mass_move_500",  # graphics cost per settings profile
 }
 # suites that sweep settings profiles unless --profile is given
