@@ -89,13 +89,20 @@ def write_report(out_root):
     regs = [r for r in rows if r[6] == "regression"]
     imps = [r for r in rows if r[6] == "improvement"]
     parts.append(f"<h2>Summary</h2><p>{len(regs)} regressions, {len(imps)} improvements, "
-                 f"{len(checks)} failed checks, {len(errors)} errored cells.</p>")
+                 f"{len(checks)} failed checks, {len(errors)} errored cells, "
+                 f"{sum(len(c.get('log_issues', [])) for c in cells)} log issues.</p>")
     if errors:
         parts.append("<h2>Errors</h2><ul>")
         for c in errors:
             parts.append(f"<li>{esc(c['engine'])}/{esc(c['profile'])} rep {c['rep']}: {esc(c['status'])}"
                          f"<pre>{esc(chr(10).join(c['infolog_tail']))}</pre></li>")
         parts.append("</ul>")
+    issues = [(c["engine"], c["profile"], i["kind"], i["message"]) for c in cells for i in c.get("log_issues", [])]
+    if issues:
+        parts.append("<h2>Log issues</h2><table><tr><th>engine</th><th>profile</th><th>kind</th><th>message</th></tr>")
+        for eng, prof, kind, msg in issues:
+            parts.append(f"<tr><td>{esc(eng)}</td><td>{esc(prof)}</td><td>{esc(kind)}</td><td>{esc(msg)}</td></tr>")
+        parts.append("</table>")
     if checks:
         parts.append("<h2>Failed checks</h2><table><tr><th>engine</th><th>profile</th><th>scenario</th>"
                      "<th>check</th><th>detail</th><th>repro</th></tr>")

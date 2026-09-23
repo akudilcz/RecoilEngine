@@ -57,5 +57,24 @@ class PrepareCell(unittest.TestCase):
                 self.assertEqual(a.read(), b.read())
 
 
+class ScanInfolog(unittest.TestCase):
+    def test_flags_widget_load_failures_but_not_helper_modules(self):
+        lines = [
+            "[t=00:00:48.9][f=-000001] Failed to load: gui_gameinfo.lua  ([LuaVFS::Include] error=2 (attempt to call global 'setmetatable'))",
+            "[t=00:00:49.0][f=-000001] Failed to load: tf_clone.lua  (no GetInfo() call)",
+            "[t=00:00:50.0][f=0000010] [LuaRules] Error: gadget foo: attempt to index a nil value",
+            "[t=00:00:51.0][f=0000011] Fatal: [ExitSpringProcess] errorMsg=\"boom\"",
+            "[t=00:00:52.0][f=0000012] normal line",
+        ]
+        issues = run.scan_infolog(lines)
+        kinds = [k for k, _ in issues]
+        self.assertEqual(kinds, ["widget_load_failed", "lua_error", "fatal"])
+        self.assertIn("gui_gameinfo.lua", issues[0][1])
+
+    def test_duplicates_collapse(self):
+        line = "[t=1][f=2] [LuaUI] Error: widget x: boom"
+        self.assertEqual(len(run.scan_infolog([line, line.replace("[t=1]", "[t=9]")])), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

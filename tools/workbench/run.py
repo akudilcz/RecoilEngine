@@ -5,6 +5,7 @@ import collections
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -63,6 +64,29 @@ def prepare_cell(cell, args, out_root):
     return cell_dir, cmd
 
 
+_ISSUE_PATTERNS = [
+    # (kind, regex); first match wins per line
+    ("widget_load_failed", re.compile(r"Failed to load: (\S+)\s+\((?!no GetInfo\(\) call)(.*)")),
+    ("fatal", re.compile(r"\bFatal:\s*(.*)")),
+    ("lua_error", re.compile(r"\[(?:LuaUI|LuaRules|LuaGaia|LuaIntro|LuaMenu)\] Error:?\s*(.*)")),
+]
+_TIMESTAMP = re.compile(r"^\[t=[^\]]*\](\[f=[^\]]*\])?\s*")
+
+
+def scan_infolog(lines):
+    """Returns [(kind, message)] for widget load failures, Lua errors and fatal errors, de-duplicated."""
+    issues, seen = [], set()
+    for line in lines:
+        for kind, pattern in _ISSUE_PATTERNS:
+            if pattern.search(line):
+                msg = _TIMESTAMP.sub("", line).strip()
+                if (kind, msg) not in seen:
+                    seen.add((kind, msg))
+                    issues.append((kind, msg))
+                break
+    return issues
+
+
 def run_cell(cell, args, out_root):
     cell_dir, cmd = prepare_cell(cell, args, out_root)
     timed_out, code = False, None
@@ -80,6 +104,7 @@ def run_cell(cell, args, out_root):
         "status": status, "exit_code": code,
         "results_dir": os.path.join(cell_dir, "results"),
         "infolog_tail": tail_lines(infolog, 40) if status in ("error", "timeout") else [],
+        "log_issues": [{"kind": k, "message": m} for k, m in scan_infolog(tail_lines(infolog, 10**7))],
     }
     with open(os.path.join(cell_dir, "cell.json"), "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
