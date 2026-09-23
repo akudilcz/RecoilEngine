@@ -30,5 +30,27 @@ class Median(unittest.TestCase):
         self.assertEqual(report.median([4, 1, 2, 3]), 2.5)
 
 
+class CompareSync(unittest.TestCase):
+    def cs(self, pairs):
+        return [{"frame": f, "checksum": c} for f, c in pairs]
+
+    def test_identical(self):
+        a = self.cs([(1, "aa"), (2, "bb")])
+        self.assertEqual(report.compare_sync(a, list(a)), ("identical", None))
+
+    def test_first_divergence_frame(self):
+        a = self.cs([(1, "aa"), (2, "bb"), (3, "cc")])
+        b = self.cs([(1, "aa"), (2, "XX"), (3, "YY")])
+        self.assertEqual(report.compare_sync(a, b), ("diverged", 2))
+
+    def test_shorter_run_diverges_where_it_ends(self):
+        a = self.cs([(1, "aa"), (2, "bb")])
+        b = self.cs([(1, "aa")])
+        self.assertEqual(report.compare_sync(a, b), ("diverged", 2))
+
+    def test_missing(self):
+        self.assertEqual(report.compare_sync(None, self.cs([(1, "aa")])), ("n/a", None))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@
 {
 	GameType=Beyond All Reason $VERSION;
 	MapName=$MAP;
+	FixedRNGSeed=$SEED;
 	IsHost=1;
 	MyPlayerName=Workbench;
 	HostIP=127.0.0.1;

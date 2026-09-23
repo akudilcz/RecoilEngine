@@ -76,5 +76,14 @@ class ScanInfolog(unittest.TestCase):
         self.assertEqual(len(run.scan_infolog([line, line.replace("[t=1]", "[t=9]")])), 1)
 
 
+class Seed(unittest.TestCase):
+    def test_seed_is_written_into_the_start_script(self):
+        s = run.render_startscript("MapName=$MAP;\nFixedRNGSeed=$SEED;", "M", seed=1234)
+        self.assertIn("FixedRNGSeed=1234;", s)
+
+    def test_default_seed_zero_means_random(self):
+        self.assertIn("FixedRNGSeed=0;", run.render_startscript("FixedRNGSeed=$SEED;", "M"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18,8 +18,9 @@ def expand_matrix(engines, profiles, reps):
     return [Cell(name, exe, prof, rep) for name, exe in engines.items() for prof in profiles for rep in range(reps)]
 
 
-def render_startscript(template, map_name):
-    return template.replace("$MAP", map_name)
+def render_startscript(template, map_name, seed=0):
+    """seed 0 lets the engine pick a random seed; any other value makes the sim reproducible."""
+    return template.replace("$MAP", map_name).replace("$SEED", str(seed))
 
 
 def status_for(exit_code, timed_out):
@@ -41,7 +42,7 @@ def prepare_cell(cell, args, out_root):
     cell_dir = os.path.join(out_root, cell.engine, cell.profile, f"rep{cell.rep}")
     os.makedirs(cell_dir, exist_ok=True)
     with open(os.path.join(HERE, "templates", "startscript.txt"), encoding="utf-8") as f:
-        script = render_startscript(f.read(), args.map)
+        script = render_startscript(f.read(), args.map, args.seed)
     script_path = os.path.join(cell_dir, "startscript.txt")
     with open(script_path, "w", encoding="utf-8") as f:
         f.write(script)
@@ -89,6 +90,7 @@ def scan_infolog(lines):
 
 def run_cell(cell, args, out_root):
     cell_dir, cmd = prepare_cell(cell, args, out_root)
+    started = datetime.datetime.now().timestamp()
     timed_out, code = False, None
     try:
         code = subprocess.run(cmd, cwd=os.path.dirname(cell.exe), timeout=args.timeout + 120).returncode
@@ -98,6 +100,10 @@ def run_cell(cell, args, out_root):
     infolog = os.path.join(args.data_dir, "infolog.txt")
     if os.path.exists(infolog):
         shutil.copy(infolog, os.path.join(cell_dir, "infolog.txt"))
+    # per-frame sync checksums written by the sync_repro scenario (BAR dbg_synctest)
+    synchash = os.path.join(args.data_dir, "synctest_synchash.json")
+    if os.path.exists(synchash) and os.path.getmtime(synchash) >= started:
+        shutil.move(synchash, os.path.join(cell_dir, "synchash.json"))
     status = status_for(code, timed_out)
     result = {
         "engine": cell.engine, "profile": cell.profile, "rep": cell.rep,
@@ -120,6 +126,7 @@ def parse_args(argv):
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--timeout", type=int, default=1800)
     p.add_argument("--map", default="Red Comet Remake 1.8")
+    p.add_argument("--seed", type=int, default=0, help="FixedRNGSeed for reproducible runs (0 = random)")
     p.add_argument("--out", default=os.path.join(HERE, "results"))
     p.add_argument("--no-report", action="store_true")
     args = p.parse_args(argv)

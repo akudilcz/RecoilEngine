@@ -30,6 +30,21 @@ def compare(baseline, candidate, rel_threshold=0.05):
     return "regression" if delta > 0 else "improvement"
 
 
+def compare_sync(baseline, candidate):
+    """Compares two lists of {frame, checksum}; returns ("identical"|"diverged"|"n/a", first differing frame)."""
+    if not baseline or not candidate:
+        return "n/a", None
+    for i, b in enumerate(baseline):
+        if i >= len(candidate):
+            return "diverged", b["frame"]
+        c = candidate[i]
+        if c["frame"] != b["frame"] or c["checksum"] != b["checksum"]:
+            return "diverged", b["frame"]
+    if len(candidate) > len(baseline):
+        return "diverged", candidate[len(baseline)]["frame"]
+    return "identical", None
+
+
 def load_cells(out_root):
     with open(os.path.join(out_root, "summary.json"), encoding="utf-8") as f:
         cells = json.load(f)
@@ -41,6 +56,11 @@ def load_cells(out_root):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             cell["scenarios"][data["scenario"]] = data
+        sync_path = os.path.join(os.path.dirname(cell["results_dir"]), "synchash.json")
+        cell["sync"] = None
+        if os.path.exists(sync_path):
+            with open(sync_path, encoding="utf-8") as f:
+                cell["sync"] = json.load(f)
     return cells
 
 
@@ -102,6 +122,20 @@ def write_report(out_root):
         parts.append("<h2>Log issues</h2><table><tr><th>engine</th><th>profile</th><th>kind</th><th>message</th></tr>")
         for eng, prof, kind, msg in issues:
             parts.append(f"<tr><td>{esc(eng)}</td><td>{esc(prof)}</td><td>{esc(kind)}</td><td>{esc(msg)}</td></tr>")
+        parts.append("</table>")
+    synced = [c for c in cells if c.get("sync")]
+    if synced:
+        base_sync = next((c["sync"] for c in synced if c["engine"] == base), synced[0]["sync"])
+        parts.append("<h2>Simulation determinism</h2><p>Per-frame sync checksums of the seeded sync_repro battle, "
+                     "compared with the first cell of the baseline engine.</p><table><tr><th>engine</th><th>profile</th>"
+                     "<th>rep</th><th>frames</th><th>digest</th><th>vs baseline</th></tr>")
+        for c in synced:
+            verdict, frame = compare_sync(base_sync["checksums"], c["sync"]["checksums"])
+            text = verdict if frame is None else f"diverged at run frame {frame}"
+            cls = "regression" if verdict == "diverged" else ""
+            parts.append(f"<tr class='{cls}'><td>{esc(c['engine'])}</td><td>{esc(c['profile'])}</td><td>{c['rep']}</td>"
+                         f"<td>{c['sync'].get('frameCount')}</td><td>{esc(str(c['sync'].get('digest')))}</td>"
+                         f"<td>{esc(text)}</td></tr>")
         parts.append("</table>")
     if checks:
         parts.append("<h2>Failed checks</h2><table><tr><th>engine</th><th>profile</th><th>scenario</th>"
