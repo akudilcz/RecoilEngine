@@ -136,6 +136,12 @@ end
 
 local function makeCtx(sc)
 	local ctx = {}
+	-- generated scenarios (one case per unit type, ...) run only the cases this accepts:
+	-- run.py --filter <globs> sets WorkbenchFilter; empty runs everything
+	local filter = Spring.GetConfigString("WorkbenchFilter", "") or ""
+	function ctx.wants(caseName)
+		return filter == "" or matches(caseName, filter)
+	end
 	function ctx.waitFrames(n)
 		local target = frames + n
 		while frames < target do coroutine.yield() end
