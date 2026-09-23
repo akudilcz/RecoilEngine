@@ -71,6 +71,15 @@ class ScanInfolog(unittest.TestCase):
         self.assertEqual(kinds, ["widget_load_failed", "lua_error", "fatal"])
         self.assertIn("gui_gameinfo.lua", issues[0][1])
 
+    def test_flags_scenarios_that_failed_to_load_and_callin_errors(self):
+        lines = [
+            "[t=1][f=-000001] [Workbench] Error: failed to load workbench/scenarios/x.lua: [string]:3: '=' expected",
+            "[t=2][f=0000010] [Workbench] Error: weapon_range_all UnitDamaged: attempt to index a nil value",
+            "[t=3][f=0000002] [Workbench] Error: synced api_selftest.fail: intentional",
+        ]
+        kinds = [k for k, _ in run.scan_infolog(lines)]
+        self.assertEqual(kinds, ["scenario_load_failed", "scenario_callin_error"])
+
     def test_duplicates_collapse(self):
         line = "[t=1][f=2] [LuaUI] Error: widget x: boom"
         self.assertEqual(len(run.scan_infolog([line, line.replace("[t=1]", "[t=9]")])), 1)

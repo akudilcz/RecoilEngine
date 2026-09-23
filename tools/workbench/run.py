@@ -86,6 +86,10 @@ _ISSUE_PATTERNS = [
     ("widget_load_failed", re.compile(r"Failed to load: (\S+)\s+\((?!no GetInfo\(\) call)(.*)")),
     ("fatal", re.compile(r"\bFatal:\s*(.*)")),
     ("lua_error", re.compile(r"\[(?:LuaUI|LuaRules|LuaGaia|LuaIntro|LuaMenu)\] Error:?\s*(.*)")),
+    # a scenario that fails to load silently drops out of glob suites; callin errors reach no check.
+    # (synced function errors are not listed: they reach the scenario through ctx.call)
+    ("scenario_load_failed", re.compile(r"\[Workbench\] Error: failed to load (.*)")),
+    ("scenario_callin_error", re.compile(r"\[Workbench\] Error: (\S+ Unit\w+: .*)")),
 ]
 _TIMESTAMP = re.compile(r"^\[t=[^\]]*\](\[f=[^\]]*\])?\s*")
 
