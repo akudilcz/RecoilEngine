@@ -47,6 +47,29 @@ Per cell you get `results/<scenario>.json`, `results/run.json`, `infolog.txt`, `
 
 A metric only counts as a regression or improvement when its median moves by more than both 5% and the baseline's spread across repetitions, so noise doesn't raise alarms. Use `--reps 3` or more when comparing performance.
 
+## What every run checks automatically
+
+- **Log issues**: the infolog is scanned for widget load failures, Lua errors and fatal errors; they are listed in the report even when every check passes.
+- **Memory**: each window records process memory at start, end and peak; growth and peak are compared against the baseline like timings.
+- **Crashes and game-ending scenarios**: an engine crash is recorded against the running scenario (no dialog is shown, so unattended runs never hang), and an engine that exits before the run finished is exit code `2`, never a silent pass. Symbolize a crash stack with
+  `wsl -d Ubuntu -- bash tools/workbench/symbolize.sh /mnt/c/<engine dir> /mnt/c/<cell>/infolog.txt`.
+
+## Simulation determinism
+
+Engine changes that claim "no behaviour change" must produce bit-identical simulations. `sync_repro` (BAR pack) runs the seeded synctest battle from a fixed frame and records per-frame sync checksums; the report compares every cell's stream with the baseline's and names the first diverging frame:
+
+```bash
+python tools/workbench/run.py --only sync_repro --seed 1234 --spectate --reps 2 \
+    --engine base=C:/Workspace/bar/engine-base/spring.exe --engine dev=C:/Workspace/bar/engine-dev/spring.exe \
+    --data-dir C:/Workspace/bar/data
+```
+
+`--seed` sets `FixedRNGSeed`; `--spectate` makes the local player a spectator and both teams NullAI, so no widget can issue orders at real-time-dependent frames (as a playing player they do, and runs diverge). Run determinism comparisons on an otherwise idle machine.
+
+A baseline engine is upstream plus only the workbench commits (built from a real clone, not a worktree: `git clone --no-local`, then `git submodule update --init --recursive`).
+
+Findings the workbench has surfaced so far: [`doc/workbench/FINDINGS.md`](../../doc/workbench/FINDINGS.md).
+
 ## Writing a scenario
 
 One Lua file in `workbench/scenarios/` (game) or `cont/base/springcontent/workbench/scenarios/` (engine, game-agnostic):
@@ -69,7 +92,9 @@ return {
 }
 ```
 
-`ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSeconds(s)`, `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)`, `log(msg)`.
+`ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSeconds(s)`, `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)` (fire and forget), `call(fn, ...) -> value | nil, err` (runs a synced function and waits for its return value), `log(msg)`.
+
+`ctx.call` never raises: Lua 5.1 cannot yield inside `pcall`, so check its second return value instead. Read enemy or hidden state through `ctx.call` rather than unsynced Lua, which only sees what the local player can see.
 
 Engine API (`Spring.Workbench`, unsynced): `IsActive`, `GetPattern`, `BeginScenario`, `EndScenario`, `BeginWindow`, `EndWindow`, `Check`, `Error`, `RunError`, `SetFrameStall(ms)`, `FinishRun`. Synced Lua only gets `IsActive` and `GetPattern`.
 
