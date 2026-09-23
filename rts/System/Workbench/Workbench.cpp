@@ -153,6 +153,15 @@ void CWorkbench::WriteScenario(const WorkbenchScenario& sc)
 		LOG_L(L_ERROR, "[Workbench] could not write %s", path.c_str());
 }
 
+void CWorkbench::OnShutdown()
+{
+	if (!active || finished)
+		return;
+	SetScenarioError("engine shut down before the scenario finished");
+	SetRunError("engine shut down before the workbench run finished");
+	FinishRun();
+}
+
 void CWorkbench::FinishRun()
 {
 	if (finished)

@@ -29,6 +29,8 @@ public:
 	void SetFrameStall(int ms) { frameStallMs = ms; }
 	int GetFrameStall() const { return frameStallMs; }
 	void FinishRun();
+	// engine is exiting: a run that never reached FinishRun (game over, crash-free quit) is an error
+	void OnShutdown();
 
 	void OnDrawFrame(float frameMs, float drawMs, float gpuMs);
 	void OnSimFrame(int frameNum, float simMs, unsigned checksum, bool checksumValid);

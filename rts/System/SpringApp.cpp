@@ -954,6 +954,9 @@ int SpringApp::Run()
 		}
 	} CATCH_SPRING_ERRORS
 
+	// a workbench run that ends here without FinishRun (e.g. the game ended) must not look like a pass
+	workbench.OnShutdown();
+
 	// no exception from main, check if some other thread interrupted our regular loop
 	// in case one did, ErrorMessageBox will call ::Kill and forcibly exit the process
 	if (!threadError->Empty()) {
