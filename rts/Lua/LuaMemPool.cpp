@@ -161,8 +161,9 @@ void* LuaMemPool::Realloc(void* ptr, size_t nsize, size_t osize)
 		if (newPtr == nullptr)
 			return nullptr;
 
-		allocStats[STAT_NBE] -= osize;
-		allocStats[STAT_NBE] += nsize;
+		// combined into one op; unsigned wraparound makes this equivalent to
+		// the previous "-= osize; += nsize" even if nsize < osize
+		allocStats[STAT_NBE] += (nsize - osize);
 #if LUA_MEASURE_ALLOC_TIME == 1
 		auto t0 = spring_now();
 #endif

@@ -90,6 +90,13 @@ protected:
 
 	using DecalOwner = std::variant<const CSolidObject*, const GhostSolidObject*>;
 	spring::unordered_map<DecalOwner, size_t, std::hash<DecalOwner>> decalOwners; // for tracks, plates and ghosts
+
+	// Rendering-only cache of dynamic_cast<const CUnit*>(owner) results, keyed
+	// the same as decalOwners; avoids repeating the cast every draw/sim frame
+	// in UpdateDecalsVisibility()/GameFramePost(). Deliberately NOT a CR_MEMBER
+	// (decalOwners already is, and is creg-serialized as a plain size_t map;
+	// this cache is rebuilt from it in PostLoad() instead of being persisted).
+	spring::unordered_map<DecalOwner, const CUnit*, std::hash<DecalOwner>> decalOwnerUnits;
 	spring::unordered_map<int, UnitMinMaxHeight> unitMinMaxHeights; // for tracks
 	spring::unordered_map<uint32_t, size_t> idToPos;
 	spring::unordered_map<uint32_t, std::tuple<const CColorMap*, std::pair<size_t, size_t>>> idToCmInfo;
@@ -211,6 +218,9 @@ private:
 	void CompactDecalsVector(int frameNum);
 
 	void UpdateDecalsVisibility();
+
+	// reused across GameFramePost() calls to avoid a per-sim-frame heap allocation
+	std::vector<const CUnit*> deferredTrackUpdate;
 
 	void AddBuildingDecalTextures();
 	void AddTexturesFromTable();

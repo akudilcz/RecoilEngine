@@ -47,6 +47,9 @@ bool LuaObjectDrawer::inAlphaBin = false;
 bool LuaObjectDrawer::drawDeferredEnabled = false;
 bool LuaObjectDrawer::drawDeferredAllowed = false;
 bool LuaObjectDrawer::bufferClearAllowed = false;
+bool LuaObjectDrawer::allowDrawModelPostDeferredEvents = true;
+
+LuaObjectDrawer::ConfigNotifyProxy LuaObjectDrawer::configNotifyProxy;
 
 int LuaObjectDrawer::binObjTeam = -1;
 
@@ -248,6 +251,9 @@ void LuaObjectDrawer::Init()
 
 	drawDeferredAllowed = configHandler->GetBool("AllowDeferredModelRendering");
 	bufferClearAllowed = configHandler->GetBool("AllowDeferredModelBufferClear");
+	allowDrawModelPostDeferredEvents = configHandler->GetBool("AllowDrawModelPostDeferredEvents");
+
+	configHandler->NotifyOnChange(&configNotifyProxy, {"AllowDrawModelPostDeferredEvents"});
 
 	assert(geomBuffer == nullptr);
 
@@ -257,6 +263,8 @@ void LuaObjectDrawer::Init()
 
 void LuaObjectDrawer::Kill()
 {
+	configHandler->RemoveObserver(&configNotifyProxy);
+
 	eventFuncs[LUAOBJ_UNIT   ] = nullptr;
 	eventFuncs[LUAOBJ_FEATURE] = nullptr;
 
@@ -271,6 +279,12 @@ void LuaObjectDrawer::Kill()
 }
 
 
+void LuaObjectDrawer::ConfigNotifyProxy::ConfigNotify(const std::string& key, const std::string& value)
+{
+	allowDrawModelPostDeferredEvents = configHandler->GetBool("AllowDrawModelPostDeferredEvents");
+}
+
+
 void LuaObjectDrawer::Update(bool init)
 {
 	assert(geomBuffer != nullptr);
@@ -282,9 +296,9 @@ void LuaObjectDrawer::Update(bool init)
 	if ((drawDeferredEnabled = geomBuffer->Valid())) {
 		drawDeferredEnabled &= (geomBuffer->Update(init));
 
-		notifyEventFlags[LUAOBJ_UNIT   ] = !unitDrawer->DrawForward() || configHandler->GetBool("AllowDrawModelPostDeferredEvents");
+		notifyEventFlags[LUAOBJ_UNIT   ] = !unitDrawer->DrawForward() || allowDrawModelPostDeferredEvents;
 		bufferClearFlags[LUAOBJ_UNIT   ] =  unitDrawer->DrawDeferred();
-		notifyEventFlags[LUAOBJ_FEATURE] = !featureDrawer->DrawForward() || configHandler->GetBool("AllowDrawModelPostDeferredEvents");
+		notifyEventFlags[LUAOBJ_FEATURE] = !featureDrawer->DrawForward() || allowDrawModelPostDeferredEvents;
 		bufferClearFlags[LUAOBJ_FEATURE] =  featureDrawer->DrawDeferred();
 
 		// if both object types are going to be drawn deferred, only

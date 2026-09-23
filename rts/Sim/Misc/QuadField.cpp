@@ -453,7 +453,9 @@ void CQuadField::MovedUnit(CUnit* unit)
 		spring::VectorInsertUnique(baseQuads[qi].teamUnits[unit->allyteam], unit, false);
 	}
 
-	unit->quads = std::move(*qfQuery.quads);
+	// copy (not move) so the pooled query buffer keeps its allocated
+	// capacity when it is returned to the per-thread cache in ~QuadFieldQuery
+	unit->quads = *qfQuery.quads;
 }
 
 void CQuadField::RemoveUnit(CUnit* unit)

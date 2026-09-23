@@ -114,12 +114,17 @@ namespace KeyInput {
 	/**
 	* Tests SDL keystates and sets values in key array
 	*/
-	void Update(int fakeMetaKey)
+	void Update(int fakeMetaKey, int eventKeyMods)
 	{
 		int numKeys = 0;
 		const uint8_t* kbState = SDL_GetKeyboardState(&numKeys);
 
-		keyMods = SDL_GetModState();
+		// SDL_GetModState() reflects every event SDL has already pumped, including
+		// key events still queued behind the one being handled; at low frame rates
+		// a whole drag (e.g. shift-drag build, release mouse, then release shift)
+		// can sit in a single batch, so later modifier changes would leak into the
+		// mouse events before them. Prefer the event's own modifier snapshot.
+		keyMods = (eventKeyMods >= 0) ? SDL_Keymod(eventKeyMods) : SDL_GetModState();
 
 		keyVec.clear();
 		keyVec.reserve(numKeys);

@@ -261,8 +261,11 @@ protected:
 
 	void DrawGhostedBuildings(int modelType) const override;
 
-	void DrawUnitModelBeingBuiltShadow(const CUnit* unit, bool noLuaCall) const;
-	void DrawUnitModelBeingBuiltOpaque(const CUnit* unit, bool noLuaCall) const;
+	// batched replacements for CUnitDrawerGLSL::DrawUnitModelBeingBuilt{Shadow,Opaque}():
+	// draw every currently being-built unit of a model-type bin in one Submit() per
+	// build stage instead of issuing 2-3 SubmitImmediately() calls per unit
+	void DrawUnitModelsBeingBuiltShadow(const std::vector<const CUnit*>& units) const;
+	void DrawUnitModelsBeingBuiltOpaque(const std::vector<const CUnit*>& units) const;
 };
 
 #define unitDrawer (CUnitDrawer::modelDrawer)

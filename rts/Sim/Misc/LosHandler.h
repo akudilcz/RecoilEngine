@@ -186,6 +186,11 @@ private:
 	std::deque<DelayedInstance> delayedTerraQue;
 	std::deque<SLosInstance*> losUpdate;
 	std::deque<SLosInstance*> losCache;
+	// number of entries in losCache that are still actually cached (isCached
+	// == true); losCache itself may additionally hold stale entries left in
+	// place by lazy deletion (reactivated instances are only unlinked from
+	// the deque when they reach the front, to avoid an O(n) erase-from-middle)
+	size_t losCacheLiveCount = 0;
 
 	std::vector<SLosInstance*> losRemove;
 	std::vector<SLosInstance*> losAdd;

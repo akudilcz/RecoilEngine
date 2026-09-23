@@ -2,6 +2,9 @@
 
 #include "Rendering/GL/myGL.h"
 
+#include <algorithm>
+#include <limits>
+
 #include "WorldDrawer.h"
 #include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Features/FeatureDefHandler.h"
@@ -14,6 +17,7 @@
 #include "Rendering/Env/WaterRendering.h"
 #include "Rendering/Env/MapRendering.h"
 #include "Rendering/Env/IWater.h"
+#include "Rendering/Env/BumpWater.h"
 #include "Rendering/CommandDrawer.h"
 #include "Rendering/DebugColVolDrawer.h"
 #include "Rendering/DebugVisibilityDrawer.h"
@@ -38,6 +42,7 @@
 #include "Rendering/Textures/S3OTextureHandler.h"
 #include "Map/BaseGroundDrawer.h"
 #include "Map/ReadMap.h"
+#include "Map/SMF/SMFReadMap.h"
 #include "Game/Camera.h"
 #include "Game/SelectedUnitsHandler.h"
 #include "Game/Game.h"
@@ -386,6 +391,81 @@ void CWorldDrawer::DrawOpaqueObjects() const
 	}
 }
 
+bool CWorldDrawer::IsWaterVisible() const
+{
+	// CReadMap::HasVisibleWater() is map-wide (any water anywhere on the map at
+	// all), so on any map with water it is true on effectively every frame, even
+	// when the camera is looking at a patch of terrain nowhere near the water
+	// line. That makes CBumpWater::UpdateWater() re-render the whole scene
+	// (sky, units, features, projectiles, particles, the Lua DrawWorldReflection
+	// callin) into the reflection/refraction FBOs every single frame for
+	// nothing. This does a cheap camera-frustum-relative refinement on top of
+	// it, using the same kind of AABB-vs-frustum test already used to cull
+	// units/features (CCamera::InView), so it is CPU-only and cannot stall the
+	// GPU pipeline -- deliberately not a GPU occlusion query, since those (see
+	// the removed/deprecated BumpWaterOcclusionQuery config) previously caused
+	// readback stalls and were removed for it.
+	//
+	// Every decision below is biased towards returning true: a false positive
+	// only costs an unnecessary reflection/refraction update (the original,
+	// always-on behaviour), while a false negative would make water disappear.
+	if (waterRendering->forceRendering)
+		return true;
+
+	if (!readMap->HasVisibleWater())
+		return false;
+
+	// endless-ocean: BumpWater can render a water plane extending well beyond
+	// the map edges, so it can be visible even when no on-map terrain is wet
+	if (const auto& water = IWater::GetWater(); water && water->GetID() == IWater::WATER_RENDERER_BUMPMAPPED) {
+		if (static_cast<CBumpWater*>(water.get())->HasEndlessOcean()) {
+			// box large enough that "not in view" can only mean the ground
+			// plane really is outside the frustum (e.g. camera pitched up)
+			const float extent = camera->GetFarPlaneDist() * 1.5f + std::max(mapDims.mapx, mapDims.mapy) * SQUARE_SIZE;
+			const AABB oceanAABB{
+				{-extent, -1024.0f, -extent},
+				{mapDims.mapx * SQUARE_SIZE + extent, 1024.0f, mapDims.mapy * SQUARE_SIZE + extent}
+			};
+
+			if (camera->InView(oceanAABB))
+				return true;
+		}
+	}
+
+	// on-map check: the SMF readmap keeps exact per-patch (min, max, avg) heights
+	// of the unsynced heightmap up to date (including terraforming/craters). A
+	// patch can only show water if its minimum height is below the water line;
+	// patches whose info is pending recomputation (min == FLT_MAX) count as wet.
+	constexpr float patchSize = CSMFReadMap::bigSquareSize * SQUARE_SIZE;
+	constexpr float waterPlaneHalfThickness = 32.0f; // waves / bump displacement slack
+
+	const int numPatchesX = mapDims.mapx / CSMFReadMap::bigSquareSize;
+	const int numPatchesZ = mapDims.mapy / CSMFReadMap::bigSquareSize;
+
+	if (numPatchesX <= 0 || numPatchesZ <= 0)
+		return true; // unexpected map dimensions, don't risk hiding water
+
+	for (int pz = 0; pz < numPatchesZ; ++pz) {
+		for (int px = 0; px < numPatchesX; ++px) {
+			const float minHeight = readMap->GetUnsyncedHeightInfo(px, pz).x;
+
+			if (minHeight >= 0.0f && minHeight != std::numeric_limits<float>::max())
+				continue; // dry patch
+
+			const AABB patchAABB{
+				{ px      * patchSize, -waterPlaneHalfThickness,  pz      * patchSize},
+				{(px + 1) * patchSize,  waterPlaneHalfThickness, (pz + 1) * patchSize}
+			};
+
+			if (camera->InView(patchAABB))
+				return true;
+		}
+	}
+
+	return false;
+}
+
+
 void CWorldDrawer::DrawAlphaObjects() const
 {
 	// transparent objects
@@ -395,7 +475,7 @@ void CWorldDrawer::DrawAlphaObjects() const
 	static const double belowPlaneEq[4] = {0.0f, -1.0f, 0.0f, 0.0f};
 	static const double abovePlaneEq[4] = {0.0f,  1.0f, 0.0f, 0.0f};
 
-	const bool hasWaterRendering = globalRendering->drawWater && readMap->HasVisibleWater();
+	const bool hasWaterRendering = globalRendering->drawWater && IsWaterVisible();
 
 	{
 		SCOPED_TIMER("Draw::World::Models::Alpha");

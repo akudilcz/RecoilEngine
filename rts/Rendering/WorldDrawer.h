@@ -22,6 +22,9 @@ private:
 	void DrawMiscObjects() const;
 	void DrawBelowWaterOverlay() const;
 
+	// per-frame, camera-relative refinement of CReadMap::HasVisibleWater()
+	bool IsWaterVisible() const;
+
 private:
 	unsigned int numUpdates = 0;
 };

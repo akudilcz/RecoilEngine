@@ -195,6 +195,11 @@ void CProjectileDrawer::Init() {
 	RECOIL_DETAILED_TRACY_ZONE;
 	eventHandler.AddClient(this);
 
+	cfgProjectileReflectionMinRadius = configHandler->GetFloat("ProjectileReflectionMinRadius");
+	cfgProjectileDrawThreadedFill = configHandler->GetBool("ProjectileDrawThreadedFill");
+	cfgProjectileDrawReuseWaterPasses = configHandler->GetBool("ProjectileDrawReuseWaterPasses");
+	configHandler->NotifyOnChange(this, {"ProjectileReflectionMinRadius", "ProjectileDrawThreadedFill", "ProjectileDrawReuseWaterPasses"});
+
 	loadscreen->SetLoadMessage("Creating Projectile Textures");
 
 	textureAtlas  = new CTextureAtlas(CTextureAtlas::ATLAS_ALLOC_MP_LEGACY, 0, 0, "ExplosFXAtlas", true);
@@ -446,6 +451,7 @@ void CProjectileDrawer::Kill() {
 	RECOIL_DETAILED_TRACY_ZONE;
 	eventHandler.RemoveClient(this);
 	autoLinkedEvents.clear();
+	configHandler->RemoveObserver(this);
 
 	glDeleteTextures(8, perlinBlendTex);
 	spring::SafeDelete(textureAtlas);
@@ -475,6 +481,13 @@ void CProjectileDrawer::Kill() {
 	configHandler->Set("SoftParticles", wantSoften);
 }
 
+void CProjectileDrawer::ConfigNotify(const std::string& key, const std::string& value)
+{
+	cfgProjectileReflectionMinRadius = configHandler->GetFloat("ProjectileReflectionMinRadius");
+	cfgProjectileDrawThreadedFill = configHandler->GetBool("ProjectileDrawThreadedFill");
+	cfgProjectileDrawReuseWaterPasses = configHandler->GetBool("ProjectileDrawReuseWaterPasses");
+}
+
 void CProjectileDrawer::UpdateDrawFlags()
 {
 	ZoneScopedN("ProjectileDrawer::UpdateDrawFlags");
@@ -482,7 +495,7 @@ void CProjectileDrawer::UpdateDrawFlags()
 	// water reflections are distorted enough that small particles contribute
 	// next to nothing visually; skipping them avoids most of the reflection
 	// pass' fill/sort/quad-generation cost on effect-heavy frames
-	const float reflMinRadius = configHandler->GetFloat("ProjectileReflectionMinRadius");
+	const float reflMinRadius = cfgProjectileReflectionMinRadius;
 
 	// per-frame invariants, hoisted out of the per-particle loop (notably
 	// IWater::GetWater()->CanDrawReflectionPass(), a virtual call that was
@@ -875,7 +888,7 @@ void CProjectileDrawer::DrawAlpha(bool drawAboveWater, bool drawBelowWater, bool
 	// in between fill the buffer for their own camera/mask and consume their
 	// own ranges, so the saved range stays valid for the whole frame.
 	const bool mainPass = !drawReflection && !drawRefraction;
-	const bool reuseWanted = configHandler->GetBool("ProjectileDrawReuseWaterPasses");
+	const bool reuseWanted = cfgProjectileDrawReuseWaterPasses;
 
 	// the above-water main pass and the water refraction pass both view the
 	// same particles from the player camera; both can re-submit the geometry
@@ -918,7 +931,7 @@ void CProjectileDrawer::DrawAlpha(bool drawAboveWater, bool drawBelowWater, bool
 			RadixSortByKey(sortedParticles, sortScratch, [](const SortableParticle& sp) noexcept { return sp.sortKey; });
 		}
 
-		const bool threadedFill = configHandler->GetBool("ProjectileDrawThreadedFill") && ThreadPool::HasThreads();
+		const bool threadedFill = cfgProjectileDrawThreadedFill && ThreadPool::HasThreads();
 
 		{
 			ZoneScopedN("ProjectileDrawer::DrawAlpha(DS)");
@@ -1059,7 +1072,7 @@ void CProjectileDrawer::DrawShadowTransparent()
 
 	{
 		ZoneScopedN("ProjectileDrawer::DrawShadowTransparent(Fill)");
-		const bool threadedFill = configHandler->GetBool("ProjectileDrawThreadedFill") && ThreadPool::HasThreads();
+		const bool threadedFill = cfgProjectileDrawThreadedFill && ThreadPool::HasThreads();
 		FillParticleGeometry(mtFillBuffers, unsortedParticles.size(), threadedFill, [this](size_t j) { return unsortedParticles[j]; });
 	}
 

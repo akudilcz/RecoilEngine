@@ -3,6 +3,7 @@
 
 #include <bit>
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <queue>
 #include <vector>
@@ -149,6 +150,22 @@ namespace QTPFS {
 
     static_assert(std::is_trivially_destructible_v<SearchQueueNode>);
 
+    // Used by PathSearch::TracePath to accumulate the path's points before they are copied into
+    // the IPath. Kept here (rather than function-local) so the backing deque's chunk allocations
+    // can be reused across searches instead of being allocated and freed every call.
+    struct TracePoint {
+        float3 point;
+        uint32_t nodeId;
+        uint32_t nodeNumber;
+        int xmin;
+        int zmin;
+        int xmax;
+        int zmax;
+        bool isBad = false;
+        float dist = 0.f;
+        uint32_t index = 0;
+    };
+
 	struct SearchThreadData {
 
         static constexpr int SEARCH_FORWARD = 0;
@@ -158,6 +175,7 @@ namespace QTPFS {
 		SparseData<SearchNode> allSearchedNodes[SEARCH_DIRECTIONS];
         SearchPriorityQueue openNodes[SEARCH_DIRECTIONS];
         std::vector<INode*> tmpNodesStore;
+        std::deque<TracePoint> tracePoints;
         int threadId = 0;
 
 		SearchThreadData(size_t nodeCount, int curThreadId)

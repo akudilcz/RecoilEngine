@@ -106,6 +106,11 @@ public:
 	virtual void SetClipPlane(uint8_t idx, const float4& cp = {0.0f,  0.0f, 0.0f, 1.0f}) const {
 		assert(false);  //doesn't make sense, except in GL4, overridden below
 	};
+	// -1 := regular rendering (default), 0/1/2 := wireframe/flat/fill construction batch;
+	// drives per-instance construction clip-plane computation in the GL4 model shaders
+	virtual void SetBuildStage(int buildStage) const {
+		assert(false);  //doesn't make sense, except in GL4, overridden below
+	};
 
 	void SetActiveShader(bool shadowed, bool deferred) const {
 		// shadowed=1 --> shader 1 (deferred=0) or 3 (deferred=1)
@@ -190,6 +195,7 @@ public:
 	ShaderShadingModes SetShadingMode(ShaderShadingModes sm) const override;
 	void SetStaticModelMatrix(const CMatrix44f& mat) const override;
 	void SetClipPlane(uint8_t idx, const float4& cp = { 0.0f,  0.0f, 0.0f, 1.0f }) const override;
+	void SetBuildStage(int buildStage) const override;
 private:
 	void SetNanoColor(const float4& color) const override;
 

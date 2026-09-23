@@ -6,6 +6,7 @@
 
 #include "ModernInfoTexture.h"
 #include "Rendering/GL/FBO.h"
+#include "System/Misc/SpringTime.h"
 
 
 namespace Shader {
@@ -21,10 +22,18 @@ public:
 
 public:
 	void Update() override;
-	bool IsUpdateNeeded() override { return true; }
+	bool IsUpdateNeeded() override;
+
+	GLuint GetTexture() override;
 private:
 	GL::Texture2D uploadTexRadar;
 	GL::Texture2D uploadTexJammer;
+
+	bool everUpdated = false;
+	bool lastGlobalLos = false;
+	unsigned int lastRadarCounter = 0;
+	unsigned int lastJammerCounter = 0;
+	spring_time lastUsage;
 };
 
 #endif // _RADAR_TEXTURE_H

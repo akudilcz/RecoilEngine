@@ -176,6 +176,11 @@ public:
 
 	bool IsInLosForAllyTeam(int allyTeam) const { return ((losStatus[allyTeam] & LOS_INLOS) != 0); }
 
+	// mirrors the early-out in UpdateLosStatus(): if true, CalcLosStatus's
+	// result would be discarded (no update, no callin) so it needn't be
+	// computed at all
+	bool IsLosStatusMasked(int allyTeam) const { return ((losStatus[allyTeam] & LOS_ALL_MASK_BITS) == LOS_ALL_MASK_BITS); }
+
 	void SetLosStatus(int allyTeam, unsigned short newStatus);
 	unsigned short CalcLosStatus(int allyTeam);
 	void UpdateLosStatus(int allyTeam);

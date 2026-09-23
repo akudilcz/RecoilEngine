@@ -136,6 +136,16 @@ void CubeMapHandler::UpdateReflectionTexture()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
 
+	// once a full cycle of faces has been rendered, there is no point in
+	// continuously re-rendering an unchanged sky + terrain reflection every
+	// frame; only restart the cycle when something the envmap depends on
+	// has actually changed (conservative: any doubt keeps us updating)
+	if (currReflectionFace == 0 && reflectionCycleValid && !ReflectionInputsChanged())
+		return;
+
+	if (currReflectionFace == 0)
+		SnapshotReflectionInputs();
+
 	// NOTE:
 	//   we unbind later in WorldDrawer::GenerateIBLTextures() to save render
 	//   context switches (which are one of the slowest OpenGL operations!)
@@ -174,11 +184,103 @@ void CubeMapHandler::UpdateReflectionTexture()
 		currReflectionFace %= 6;
 	}
 
+	if (currReflectionFace == 0)
+		reflectionCycleValid = true;
+
 	if (generateMipMaps && currReflectionFace == 0) {
 		glBindTexture(GL_TEXTURE_CUBE_MAP, envReflectionTexID);
 		glGenerateMipmapEXT(GL_TEXTURE_CUBE_MAP);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 	}
+}
+
+bool CubeMapHandler::ReflectionInputsChanged() const
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+
+	const auto& sky = ISky::GetSky();
+
+	// some sky implementations (e.g. ModernSky) animate their cloud layer
+	// continuously via a time-based shader uniform, so their appearance
+	// changes every frame regardless of any tracked CPU-side state; be
+	// conservative and keep updating for anything but the known-static ones
+	const std::string& skyName = sky->GetName();
+	if (skyName != "SkyBox" && skyName != "NullSky")
+		return true;
+
+	if (readMap->GetHeightMapUpdated())
+		return true;
+
+	CCamera* activeCam = CCameraHandler::GetActiveCamera();
+	if (activeCam == nullptr || (activeCam->GetPos() - lastReflectionCamPos).SqLength() > (128.0f * 128.0f))
+		return true;
+
+	const float4& sunDir = sky->GetLight()->GetLightDir();
+	if (sunDir != lastSunLightDir || sunDir.w != lastSunLightDir.w)
+		return true;
+
+	if (sky->skyColor != lastSkyColor || sky->sunColor != lastSunColor || sky->cloudColor != lastCloudColor)
+		return true;
+	if (sky->fogColor != lastFogColor || sky->fogColor.w != lastFogColor.w)
+		return true;
+	if (sky->cloudDensity != lastCloudDensity)
+		return true;
+	if (sky->GetSkyAxisAngle() != lastSkyAxisAngle || sky->GetSkyAxisAngle().w != lastSkyAxisAngle.w)
+		return true;
+
+	// NB: CSunLighting::operator== compares the addresses in its internal
+	// `colors[]` cache-array rather than the pointed-to values, so it can
+	// not be used here to diff against a snapshot; compare the individual
+	// fields we actually care about instead
+	if (sunLighting->groundAmbientColor != lastGroundAmbientColor)
+		return true;
+	if (sunLighting->groundDiffuseColor != lastGroundDiffuseColor)
+		return true;
+	if (sunLighting->groundSpecularColor != lastGroundSpecularColor)
+		return true;
+	if (sunLighting->modelAmbientColor != lastModelAmbientColor)
+		return true;
+	if (sunLighting->modelDiffuseColor != lastModelDiffuseColor)
+		return true;
+	if (sunLighting->modelSpecularColor != lastModelSpecularColor)
+		return true;
+	if (sunLighting->specularExponent != lastSpecularExponent)
+		return true;
+	if (sunLighting->groundShadowDensity != lastGroundShadowDensity)
+		return true;
+	if (sunLighting->modelShadowDensity != lastModelShadowDensity)
+		return true;
+
+	return false;
+}
+
+void CubeMapHandler::SnapshotReflectionInputs()
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+
+	const auto& sky = ISky::GetSky();
+
+	if (CCamera* activeCam = CCameraHandler::GetActiveCamera(); activeCam != nullptr)
+		lastReflectionCamPos = activeCam->GetPos();
+
+	lastSunLightDir = sky->GetLight()->GetLightDir();
+
+	lastSkyColor = sky->skyColor;
+	lastSunColor = sky->sunColor;
+	lastCloudColor = sky->cloudColor;
+	lastFogColor = sky->fogColor;
+	lastCloudDensity = sky->cloudDensity;
+	lastSkyAxisAngle = sky->GetSkyAxisAngle();
+
+	lastGroundAmbientColor = sunLighting->groundAmbientColor;
+	lastGroundDiffuseColor = sunLighting->groundDiffuseColor;
+	lastGroundSpecularColor = sunLighting->groundSpecularColor;
+	lastModelAmbientColor = sunLighting->modelAmbientColor;
+	lastModelDiffuseColor = sunLighting->modelDiffuseColor;
+	lastModelSpecularColor = sunLighting->modelSpecularColor;
+	lastSpecularExponent = sunLighting->specularExponent;
+	lastGroundShadowDensity = sunLighting->groundShadowDensity;
+	lastModelShadowDensity = sunLighting->modelShadowDensity;
 }
 
 void CubeMapHandler::CreateReflectionFace(unsigned int glFace, bool skyOnly)

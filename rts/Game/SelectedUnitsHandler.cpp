@@ -691,28 +691,22 @@ void CSelectedUnitsHandler::Draw()
 					(guihandler->inCommand < int(guihandler->commands.size())) &&
 					(guihandler->commands[guihandler->inCommand].id < 0)))) {
 
-			bool myColor = true;
-			glColor4fv(cmdColors.buildBox);
+			static std::vector<const CBuilderCAI*> myBuilderCAIs;
+			static std::vector<const CBuilderCAI*> allyBuilderCAIs;
+			myBuilderCAIs.clear();
+			allyBuilderCAIs.clear();
 
 			for (const auto& [bid, builderCAI] : unitHandler.GetBuilderCAIs()) {
 				const CUnit* builder = builderCAI->owner;
 
 				if (builder->team == gu->myTeam) {
-					if (!myColor) {
-						glColor4fv(cmdColors.buildBox);
-						myColor = true;
-					}
-					commandDrawer->DrawQuedBuildingSquares(builderCAI);
-				}
-
-				else if (teamHandler.AlliedTeams(builder->team, gu->myTeam)) {
-					if (myColor) {
-						glColor4fv(cmdColors.allyBuildBox);
-						myColor = false;
-					}
-					commandDrawer->DrawQuedBuildingSquares(builderCAI);
+					myBuilderCAIs.push_back(builderCAI);
+				} else if (teamHandler.AlliedTeams(builder->team, gu->myTeam)) {
+					allyBuilderCAIs.push_back(builderCAI);
 				}
 			}
+
+			commandDrawer->DrawQuedBuildingSquares(myBuilderCAIs, allyBuilderCAIs);
 		}
 	}
 

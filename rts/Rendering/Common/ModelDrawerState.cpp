@@ -454,6 +454,19 @@ void CModelDrawerStateGL4::SetClipPlane(uint8_t idx, const float4& cp) const
 	}
 }
 
+
+void CModelDrawerStateGL4::SetBuildStage(int buildStage) const
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+	assert(modelShader != nullptr);
+	assert(modelShader->IsBound());
+
+	// -1 (default) := regular rendering, clipPlane0/1 uniforms are used as-is;
+	// 0/1/2 := drawing a batch of units-being-built (wire/flat/fill stage), the
+	// shader derives per-instance construction clip planes from ModelUniformData
+	modelShader->SetUniform("buildStage", buildStage);
+}
+
 IModelDrawerState::IModelDrawerState()
 {
 	RECOIL_DETAILED_TRACY_ZONE;

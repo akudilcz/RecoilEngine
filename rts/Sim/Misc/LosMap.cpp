@@ -412,6 +412,8 @@ void CLosTableHelper::Debug(const LosTable& losRays, const std::vector<int2>& po
 void CLosMap::AddCircle(SLosInstance* instance, int amount)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	bool changed = false;
+
 	MidpointCircleAlgoPerLine(instance->radius, [&](int width, int y) {
 		const unsigned y_ = instance->basePos.y + y;
 
@@ -419,11 +421,18 @@ void CLosMap::AddCircle(SLosInstance* instance, int amount)
 			const unsigned sx = std::clamp(instance->basePos.x - width,     0, size.x);
 			const unsigned ex = std::clamp(instance->basePos.x + width + 1, 0, size.x);
 
+			if (sx < ex)
+				changed = true;
+
 			for (unsigned x_ = sx; x_ < ex; ++x_) {
 				losmap[(y_ * size.x) + x_] += amount;
 			}
 		}
 	});
+
+	// amount is always non-zero at call sites (+1/-1), so any touched square changed value
+	if (changed)
+		++changeCounter;
 }
 
 
@@ -438,6 +447,10 @@ void CLosMap::AddRaycast(SLosInstance* instance, int amount)
 	// inform ReadMap when squares enter LoS
 	const bool visibleInstanceSquares = (instance->allyteam >= 0 && (instance->allyteam == gu->myAllyTeam || gu->spectatingFullView));
 	const bool updateUnsyncedHeightMap = sendReadmapEvents && visibleInstanceSquares;
+
+	// losSquares was already checked non-empty (and not the EMPTY_RLE marker) above,
+	// so this call always touches at least one square.
+	++changeCounter;
 
 	if ((amount > 0) && updateUnsyncedHeightMap) {
 		for (const SLosInstance::RLE rle: losSquares) {

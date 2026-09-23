@@ -741,16 +741,19 @@ uint64_t CGlobalRendering::CalcGLDeltaTime(uint32_t queryIdx0, uint32_t queryIdx
 
 	GLint res = 0;
 
-	// results from the previous frame should already (or soon) be available
-	while (!res) {
-		glGetQueryObjectiv(glTimerQueries[queryBase + queryIdx1], GL_QUERY_RESULT_AVAILABLE, &res);
-	}
+	// results from the previous frame should already (or soon) be available;
+	// avoid stalling the CPU on the GPU query and just reuse the last known
+	// delta if it is not ready yet, we will pick up the fresh value next call
+	glGetQueryObjectiv(glTimerQueries[queryBase + queryIdx1], GL_QUERY_RESULT_AVAILABLE, &res);
+
+	if (!res)
+		return lastGLDeltaTime;
 
 	glGetQueryObjectui64v(glTimerQueries[queryBase + queryIdx0], GL_QUERY_RESULT, &t0);
 	glGetQueryObjectui64v(glTimerQueries[queryBase + queryIdx1], GL_QUERY_RESULT, &t1);
 
 	// nanoseconds between timestamps
-	return (t1 - t0);
+	return (lastGLDeltaTime = (t1 - t0));
 }
 
 
