@@ -85,5 +85,20 @@ class Timers(unittest.TestCase):
         self.assertEqual(rows[0][1], [10.0, None])
 
 
+class SyncBaseline(unittest.TestCase):
+    def test_baseline_is_the_first_engines_first_cell(self):
+        cells = [{"engine": "base", "sync": None}, {"engine": "dev", "sync": {"checksums": [1]}},
+                 {"engine": "dev", "sync": {"checksums": [2]}}]
+        ref, label = report.sync_reference(cells, "base")
+        self.assertEqual(ref, [1])
+        self.assertIn("baseline engine has no", label)
+
+    def test_baseline_engine_used_when_present(self):
+        cells = [{"engine": "base", "sync": {"checksums": [9]}}, {"engine": "dev", "sync": {"checksums": [1]}}]
+        ref, label = report.sync_reference(cells, "base")
+        self.assertEqual(ref, [9])
+        self.assertEqual(label, "base")
+
+
 if __name__ == "__main__":
     unittest.main()

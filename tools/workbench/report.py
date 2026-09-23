@@ -45,6 +45,17 @@ def compare_sync(baseline, candidate):
     return "identical", None
 
 
+def sync_reference(cells, base):
+    """(reference checksums, label): the baseline engine's first cell, or a clearly labelled fallback."""
+    for c in cells:
+        if c["engine"] == base and c.get("sync"):
+            return c["sync"]["checksums"], base
+    for c in cells:
+        if c.get("sync"):
+            return c["sync"]["checksums"], f"{c['engine']} (baseline engine has no checksums)"
+    return None, ""
+
+
 def load_cells(out_root):
     with open(os.path.join(out_root, "summary.json"), encoding="utf-8") as f:
         cells = json.load(f)
@@ -156,12 +167,12 @@ def write_report(out_root):
         parts.append("</table>")
     synced = [c for c in cells if c.get("sync")]
     if synced:
-        base_sync = next((c["sync"] for c in synced if c["engine"] == base), synced[0]["sync"])
+        ref, ref_label = sync_reference(cells, base)
         parts.append("<h2>Simulation determinism</h2><p>Per-frame sync checksums of the seeded sync_repro battle, "
-                     "compared with the first cell of the baseline engine.</p><table><tr><th>engine</th><th>profile</th>"
+                     f"compared with the first cell of {esc(ref_label)}.</p><table><tr><th>engine</th><th>profile</th>"
                      "<th>rep</th><th>frames</th><th>digest</th><th>vs baseline</th></tr>")
         for c in synced:
-            verdict, frame = compare_sync(base_sync["checksums"], c["sync"]["checksums"])
+            verdict, frame = compare_sync(ref, c["sync"]["checksums"])
             text = verdict if frame is None else f"diverged at run frame {frame}"
             cls = "regression" if verdict == "diverged" else ""
             parts.append(f"<tr class='{cls}'><td>{esc(c['engine'])}</td><td>{esc(c['profile'])}</td><td>{c['rep']}</td>"
