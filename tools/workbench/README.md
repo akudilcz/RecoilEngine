@@ -20,7 +20,7 @@ python tools/workbench/run.py --suite smoke --engine dev=C:/Workspace/bar/engine
     --data-dir C:/Workspace/bar/data
 ```
 
-Suites: `smoke` (the default), `standard` (adds big battles, every ground unit's and ship's movement, every factory's and builder's production and every armed aircraft's strike), `full` (adds every armed unit's weapon range; hours), `determinism` (`sync_repro`; use with `--spectate --seed N`) and `render` (graphics cost across the `low`, `default` and `ultra` settings profiles; the report adds a settings-sweep table). `--only <globs>` runs any scenarios by name instead; `--profile` picks profiles explicitly; `--filter <globs>` focuses generated scenarios on some cases, e.g. `--only weapon_range_all --filter corsiegebreaker` (scenarios ask `ctx.wants(caseName)`).
+Suites: `smoke` (the default), `standard` (adds big battles, every ground unit's and ship's movement, every factory's and builder's production and every armed aircraft's strike), `full` (adds every armed unit's weapon range; hours), `determinism` (`sync_repro`; use with `--spectate --seed N`), `logic` (every generated game-logic check, 747 checks in ~3.5 min at max sim speed) and `render` (graphics cost across the `low`, `default` and `ultra` settings profiles; the report adds a settings-sweep table). `--only <globs>` runs any scenarios by name instead; `--profile` picks profiles explicitly; `--filter <globs>` focuses generated scenarios on some cases, e.g. `--only weapon_range_all --filter corsiegebreaker` (scenarios ask `ctx.wants(caseName)`).
 
 Compare two builds (the first engine is the baseline):
 
@@ -109,6 +109,10 @@ Engine API (`Spring.Workbench`, unsynced): `IsActive`, `GetPattern`, `BeginScena
 A game opts in with a widget and a gadget that `VFS.Include("workbench/harness.lua")` when `Spring.Workbench and Spring.Workbench.IsActive()` (see BAR's `dbg_workbench.lua`).
 
 ## Tests
+
+CI (`.github/workflows/workbench.yml`) runs on every change to the workbench: runner and report tests, a Lua 5.1 parse of the harness and engine scenarios, and the C++ unit tests (`test_Workbench`, `test_KeyInput`) in the official build image. BAR's own luacheck CI covers the game's scenarios.
+
+`--jobs N` runs a cell's scenarios in N engine instances with private write dirs and merges the results. Measure before relying on it: on a 16-thread desktop 3 jobs were slower than 1, because each instance's sim already uses every core.
 
 ```bash
 python -m unittest discover -s tools/workbench/tests          # runner + report
