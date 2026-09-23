@@ -16,9 +16,14 @@ Cell = collections.namedtuple("Cell", "engine exe profile rep")
 # named scenario sets; --only overrides
 SUITES = {
     "smoke": "api_selftest,render_baseline,mass_move_500,weapon_range,ui_lowfps",   # ~12 min
-    "standard": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,unit_movement",
+    "standard": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,unit_movement,unit_behaviours",
     "determinism": "sync_repro",  # use with --spectate --seed N
-    "full": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,unit_movement",  # hours
+    "full": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,unit_movement,unit_behaviours",  # hours
+    "render": "render_baseline,mass_move_500",  # graphics cost per settings profile
+}
+# suites that sweep settings profiles unless --profile is given
+SUITE_PROFILES = {
+    "render": ["low", "default", "ultra"],
 }
 
 
@@ -156,7 +161,7 @@ def parse_args(argv):
         p.error(f"unknown suite '{args.suite}' (known: {', '.join(SUITES)})")
     if args.only is None:
         args.only = SUITES[args.suite] if args.suite else SUITES["smoke"]
-    args.profile = args.profile or ["default"]
+    args.profile = args.profile or SUITE_PROFILES.get(args.suite, ["default"])
     for prof in args.profile:
         if not os.path.exists(os.path.join(HERE, "profiles", prof + ".cfg")):
             p.error(f"unknown profile '{prof}' (no profiles/{prof}.cfg)")

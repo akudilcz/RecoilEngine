@@ -114,6 +114,17 @@ class Suites(unittest.TestCase):
             args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "smoke", "--only", "x"])
             self.assertEqual(args.only, "x")
 
+    def test_render_suite_sweeps_settings_profiles(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "render"])
+            self.assertEqual(args.profile, ["low", "default", "ultra"])
+
+    def test_explicit_profile_overrides_suite_profiles(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "render",
+                                   "--profile", "low"])
+            self.assertEqual(args.profile, ["low"])
+
     def test_unknown_suite_is_an_error(self):
         with tempfile.TemporaryDirectory() as out, self.assertRaises(SystemExit):
             run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "nope"])

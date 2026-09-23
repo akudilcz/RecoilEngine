@@ -102,3 +102,21 @@ class SyncBaseline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProfileSweep(unittest.TestCase):
+    def cell(self, profile, frame, gpu):
+        return {"engine": "dev", "profile": profile, "scenarios": {"s": {"windows": [
+            {"name": "w", "frameTimeMs": {"count": 1, "p50": frame, "p95": frame * 2},
+             "gpuTimeMs": {"count": 1, "p50": gpu}}]}}}
+
+    def test_rows_per_window_with_cost_relative_to_first_profile(self):
+        cells = [self.cell("low", 5.0, 2.0), self.cell("ultra", 10.0, 8.0)]
+        rows = report.profile_sweep_rows(cells, ["dev"], ["low", "ultra"])
+        self.assertEqual(rows, [
+            ("s", "w", "dev", "low", 5.0, 10.0, 2.0, None),
+            ("s", "w", "dev", "ultra", 10.0, 20.0, 8.0, 100.0),
+        ])
+
+    def test_single_profile_has_no_sweep(self):
+        self.assertEqual(report.profile_sweep_rows([self.cell("low", 5.0, 2.0)], ["dev"], ["low"]), [])

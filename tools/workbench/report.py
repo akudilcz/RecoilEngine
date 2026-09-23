@@ -117,6 +117,40 @@ def timer_rows(cells, engines, profile, scenario, window, top=12):
     return [(name, [per_engine[e].get(name) for e in engines]) for name, _ in order]
 
 
+def _stat_series(cells, engine, profile, scenario, window, metric, stat):
+    out = []
+    for c in cells:
+        if c["engine"] == engine and c["profile"] == profile:
+            for w in (c["scenarios"].get(scenario) or {}).get("windows", []):
+                m = w.get(metric) if w["name"] == window else None
+                if m and m.get("count", 0) > 0 and stat in m:
+                    out.append(m[stat])
+    return out
+
+
+def profile_sweep_rows(cells, engines, profiles):
+    """Settings sweep: [(scenario, window, engine, profile, frame p50, frame p95, gpu p50, frame cost % vs the
+    first profile)], medians across repetitions. Empty unless more than one profile ran."""
+    if len(profiles) < 2:
+        return []
+    windows = sorted({(name, w["name"]) for c in cells for name, sc in c["scenarios"].items() for w in sc.get("windows", [])})
+    rows = []
+    for scenario, window in windows:
+        for eng in engines:
+            first = None
+            for prof in profiles:
+                series = [_stat_series(cells, eng, prof, scenario, window, m, st)
+                          for m, st in (("frameTimeMs", "p50"), ("frameTimeMs", "p95"), ("gpuTimeMs", "p50"))]
+                vals = [median(v) if v else None for v in series]
+                cost = None
+                if first is None:
+                    first = vals[0]
+                elif first and vals[0] is not None:
+                    cost = (vals[0] - first) / first * 100.0
+                rows.append((scenario, window, eng, prof, *vals, cost))
+    return rows
+
+
 def write_report(out_root):
     cells = load_cells(out_root)
     engines = list(dict.fromkeys(c["engine"] for c in cells))
@@ -195,6 +229,18 @@ def write_report(out_root):
         parts.append(f"<tr class='{cls}'><td>{esc(profile)}</td><td>{esc(scenario)}</td><td>{esc(window)}</td>"
                      f"<td>{esc(metric)}</td><td>{esc(eng)}</td><td>{val}</td><td>{esc(verdict)}</td></tr>")
     parts.append("</table>")
+    profiles = list(dict.fromkeys(c["profile"] for c in cells))
+    sweep = profile_sweep_rows(cells, engines, profiles)
+    if sweep:
+        fmt = lambda v: "" if v is None else f"{v:.2f}"
+        parts.append(f"<h2>Settings sweep (cost relative to {esc(profiles[0])})</h2><table><tr><th>scenario</th>"
+                     "<th>window</th><th>engine</th><th>profile</th><th>frame p50</th><th>frame p95</th>"
+                     "<th>GPU p50</th><th>frame cost</th></tr>")
+        for scenario, window, eng, prof, f50, f95, g50, cost in sweep:
+            parts.append(f"<tr><td>{esc(scenario)}</td><td>{esc(window)}</td><td>{esc(eng)}</td><td>{esc(prof)}</td>"
+                         f"<td>{fmt(f50)}</td><td>{fmt(f95)}</td><td>{fmt(g50)}</td>"
+                         f"<td>{'' if cost is None else f'{cost:+.0f}%'}</td></tr>")
+        parts.append("</table>")
     windows = sorted({(profile, scenario, window) for profile, scenario, window in keys})
     timer_sections = []
     for profile, scenario, window in windows:
