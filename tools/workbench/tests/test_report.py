@@ -1,0 +1,34 @@
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import report  # noqa: E402
+
+
+class Compare(unittest.TestCase):
+    def test_same_within_threshold(self):
+        self.assertEqual(report.compare([10.0, 10.2, 9.9], [10.1, 10.3, 10.0]), "same")
+
+    def test_regression_beyond_threshold_and_spread(self):
+        self.assertEqual(report.compare([10.0, 10.1, 9.9], [12.0, 12.1, 11.9]), "regression")
+
+    def test_improvement(self):
+        self.assertEqual(report.compare([10.0, 10.1, 9.9], [8.0, 8.1, 7.9]), "improvement")
+
+    def test_noisy_delta_is_same(self):
+        # 20% median delta, but the baseline spread is larger than the delta
+        self.assertEqual(report.compare([5.0, 10.0, 15.0], [12.0, 12.0, 12.0]), "same")
+
+    def test_missing_data(self):
+        self.assertEqual(report.compare([], [1.0]), "n/a")
+
+
+class Median(unittest.TestCase):
+    def test_even_and_odd(self):
+        self.assertEqual(report.median([3, 1, 2]), 2)
+        self.assertEqual(report.median([4, 1, 2, 3]), 2.5)
+
+
+if __name__ == "__main__":
+    unittest.main()
