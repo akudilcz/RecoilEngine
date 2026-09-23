@@ -52,5 +52,19 @@ class CompareSync(unittest.TestCase):
         self.assertEqual(report.compare_sync(None, self.cs([(1, "aa")])), ("n/a", None))
 
 
+class MemorySeries(unittest.TestCase):
+    def test_memory_metrics_are_read_from_memoryMB(self):
+        cell = {"engine": "dev", "profile": "default", "scenarios": {"s": {"windows": [
+            {"name": "w", "frameTimeMs": {"count": 1, "p50": 10.0},
+             "memoryMB": {"start": 100.0, "peak": 400.0, "end": 250.0, "growth": 150.0}}]}}}
+        self.assertEqual(report._metric_series([cell], "dev", "default", "s", "w", "memPeakMB"), [400.0])
+        self.assertEqual(report._metric_series([cell], "dev", "default", "s", "w", "memGrowthMB"), [150.0])
+
+    def test_old_results_without_memory_are_skipped(self):
+        cell = {"engine": "dev", "profile": "default", "scenarios": {"s": {"windows": [
+            {"name": "w", "frameTimeMs": {"count": 1, "p50": 10.0}}]}}}
+        self.assertEqual(report._metric_series([cell], "dev", "default", "s", "w", "memPeakMB"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

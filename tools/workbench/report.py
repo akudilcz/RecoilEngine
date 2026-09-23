@@ -64,14 +64,28 @@ def load_cells(out_root):
     return cells
 
 
+_MEMORY_METRICS = {"memPeakMB": "peak", "memGrowthMB": "growth"}
+
+
+def _metric_value(window, metric):
+    """p50 of a timing metric, or a memory figure; None when the window lacks it."""
+    if metric in _MEMORY_METRICS:
+        mem = window.get("memoryMB")
+        return mem[_MEMORY_METRICS[metric]] if mem and mem.get("peak", 0) > 0 else None
+    m = window.get(metric)
+    return m["p50"] if m and m["count"] > 0 else None
+
+
 def _metric_series(cells, engine, profile, scenario, window, metric):
     out = []
     for c in cells:
         if c["engine"] == engine and c["profile"] == profile:
             sc = c["scenarios"].get(scenario)
             for w in (sc or {}).get("windows", []):
-                if w["name"] == window and w[metric]["count"] > 0:
-                    out.append(w[metric]["p50"])
+                if w["name"] == window:
+                    v = _metric_value(w, metric)
+                    if v is not None:
+                        out.append(v)
     return out
 
 
@@ -93,7 +107,7 @@ def write_report(out_root):
                     checks.append((c["engine"], c["profile"], name, chk["name"], chk["detail"], c["results_dir"]))
 
     for profile, scenario, window in sorted(keys):
-        for metric in ("frameTimeMs", "simTimeMs", "gpuTimeMs", "drawTimeMs"):
+        for metric in ("frameTimeMs", "simTimeMs", "gpuTimeMs", "drawTimeMs", "memPeakMB", "memGrowthMB"):
             bs = _metric_series(cells, base, profile, scenario, window, metric)
             for eng in engines:
                 s = _metric_series(cells, eng, profile, scenario, window, metric)
@@ -145,7 +159,7 @@ def write_report(out_root):
             parts.append(f"<tr><td>{esc(eng)}</td><td>{esc(prof)}</td><td>{esc(sc)}</td><td>{esc(name)}</td>"
                          f"<td>{esc(detail)}</td><td>{esc(cmd_path)}</td></tr>")
         parts.append("</table>")
-    parts.append("<h2>Metrics (median of p50 per repetition, ms)</h2><table><tr><th>profile</th><th>scenario</th>"
+    parts.append("<h2>Metrics (median across repetitions; times are p50 ms, memory MB)</h2><table><tr><th>profile</th><th>scenario</th>"
                  "<th>window</th><th>metric</th><th>engine</th><th>median</th><th>vs baseline</th></tr>")
     for profile, scenario, window, metric, eng, med, verdict in rows:
         cls = verdict if verdict in ("regression", "improvement") else ""
