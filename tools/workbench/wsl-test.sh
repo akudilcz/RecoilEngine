@@ -13,4 +13,9 @@ cd "$SRC_WSL"
 [ -f build-amd64-linux/build.ninja ] || docker-build-v2/build.sh --configure linux -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
 args=(); for t in "${TARGETS[@]}"; do args+=(-t "$t"); done
 docker-build-v2/build.sh -j "$JOBS" --compile linux "${args[@]}"
-for t in "${TARGETS[@]}"; do "./build-amd64-linux/test/$t"; done
+# run inside the build image: it has the runtime libraries (e.g. SDL2) the tests link against
+source docker-build-v2/images_versions.sh
+IMAGE="${CONTAINER_IMAGE:-ghcr.io/beyond-all-reason/recoil-build-amd64-linux@${image_version[amd64-linux]}}"
+for t in "${TARGETS[@]}"; do
+	docker run --rm -v "$PWD/build-amd64-linux:/build/out:ro" "$IMAGE" "/build/out/test/$t"
+done

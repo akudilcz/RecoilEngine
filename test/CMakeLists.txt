@@ -215,6 +215,23 @@ endif()
 	add_spring_test(${test_name} "${test_src}" "${test_libs}" "")
 
 ################################################################################
+### KeyInput (low-fps modifier handling)
+if (TARGET SDL2::SDL2)
+	set(test_name KeyInput)
+	set(test_src
+			"${CMAKE_CURRENT_SOURCE_DIR}/engine/System/Input/testKeyInput.cpp"
+			"${ENGINE_SOURCE_DIR}/System/Input/KeyInput.cpp"
+			${test_Common_sources}
+		)
+
+	set(test_libs
+			SDL2::SDL2
+		)
+
+	add_spring_test(${test_name} "${test_src}" "${test_libs}" "")
+endif()
+
+################################################################################
 ### Matrix44f
 	set(test_name Matrix44f)
 	set(test_src
