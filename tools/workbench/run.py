@@ -2,24 +2,29 @@
 """Recoil Workbench matrix runner: engines x profiles x repetitions, one engine launch per cell."""
 import argparse
 import collections
+import concurrent.futures
 import datetime
+import fnmatch
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 Cell = collections.namedtuple("Cell", "engine exe profile rep")
 
 # named scenario sets; --only overrides
 SUITES = {
-    "smoke": "api_selftest,render_baseline,mass_move_500,weapon_range,ui_lowfps",   # ~12 min
+    "smoke": "api_selftest,render_baseline,mass_move_500,weapon_range,ui_lowfps",   # ~2 min
     "standard": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",
     "determinism": "sync_repro",  # use with --spectate --seed N
     "full": "api_selftest,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",  # hours
     "render": "render_baseline,mass_move_500",  # graphics cost per settings profile
+    # every generated game-logic check, at max sim speed (~3.5 min)
+    "logic": "unit_behaviours,unit_movement,ship_movement,air_attack,weapon_range_all",
 }
 # suites that sweep settings profiles unless --profile is given
 SUITE_PROFILES = {
@@ -42,6 +47,72 @@ def status_for(exit_code, timed_out):
     return {0: "ok", 1: "checks_failed"}.get(exit_code, "error")
 
 
+# rough relative wall-clock cost of scenarios at max sim speed, used to balance --jobs shards
+SCENARIO_COSTS = {
+    "weapon_range_all": 130, "unit_movement": 36, "ship_movement": 10, "unit_behaviours": 5,
+    "air_attack": 4, "big_battle": 60, "mass_move_5000": 60, "mass_move_2000": 40, "sync_repro": 150,
+}
+# a shard's private write dir links these from the shared data dir and copies these files;
+# everything else (LuaUI widget config, infolog, cache) stays private to the instance
+SHARED_DIRS = ("games", "maps", "music", "pool", "packages")
+SHARED_FILES = ("devmode.txt", "uikeys.txt")
+STATUS_RANK = {"ok": 0, "checks_failed": 1, "error": 2, "timeout": 3}
+
+
+def known_scenarios(data_dir, exe):
+    """Scenario names (file basenames) in the game checkout and the engine's springcontent."""
+    names = set()
+    game_dir = os.path.join(data_dir, "games", "BAR.sdd", "workbench", "scenarios")
+    if os.path.isdir(game_dir):
+        names.update(os.path.splitext(f)[0] for f in os.listdir(game_dir) if f.endswith(".lua"))
+    content = os.path.join(os.path.dirname(exe), "base", "springcontent.sdz")
+    if os.path.exists(content):
+        with zipfile.ZipFile(content) as z:
+            for n in z.namelist():
+                if n.startswith("workbench/scenarios/") and n.endswith(".lua"):
+                    names.add(os.path.splitext(os.path.basename(n))[0])
+    return sorted(names)
+
+
+def resolve_scenarios(patterns, names):
+    """Expands comma-separated globs against known names, in pattern order; unknown literals are
+    kept so the engine reports them as unmatched."""
+    out = []
+    for pat in patterns.split(","):
+        hits = [n for n in names if fnmatch.fnmatchcase(n, pat)] or [pat]
+        out.extend(h for h in hits if h not in out)
+    return out
+
+
+def shard(names, n, costs):
+    """Greedy longest-first split into at most n shards of similar cost; no empty shards."""
+    shards = [[] for _ in range(max(1, n))]
+    load = [0] * len(shards)
+    for name in sorted(names, key=lambda x: -costs.get(x, 1)):
+        i = load.index(min(load))
+        shards[i].append(name)
+        load[i] += costs.get(name, 1)
+    return [s for s in shards if s]
+
+
+def make_write_dir(data_dir, path):
+    """A private engine write dir sharing the game and maps with data_dir (directory junctions
+    on Windows, symlinks elsewhere), so several engine instances can run at once."""
+    os.makedirs(path, exist_ok=True)
+    for d in SHARED_DIRS:
+        src, dst = os.path.join(data_dir, d), os.path.join(path, d)
+        if os.path.isdir(src) and not os.path.exists(dst):
+            if os.name == "nt":
+                import _winapi
+                _winapi.CreateJunction(os.path.abspath(src), dst)
+            else:
+                os.symlink(os.path.abspath(src), dst)
+    for f in SHARED_FILES:
+        if os.path.exists(os.path.join(data_dir, f)):
+            shutil.copyfile(os.path.join(data_dir, f), os.path.join(path, f))
+    return path
+
+
 def tail_lines(path, n):
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
@@ -50,9 +121,11 @@ def tail_lines(path, n):
         return []
 
 
-def prepare_cell(cell, args, out_root):
-    """Writes the cell's start script and config, returns (cell_dir, command)."""
-    cell_dir = os.path.join(out_root, cell.engine, cell.profile, f"rep{cell.rep}")
+def prepare_cell(cell, args, out_root, scenarios=None, write_dir=None, shard_name=None):
+    """Writes the cell's start script and config, returns (cell_dir, command). With a shard, the
+    shard's files go to <cell>/<shard_name>/ while results still land in <cell>/results."""
+    base_dir = os.path.join(out_root, cell.engine, cell.profile, f"rep{cell.rep}")
+    cell_dir = os.path.join(base_dir, shard_name) if shard_name else base_dir
     os.makedirs(cell_dir, exist_ok=True)
     # --spectate: the local player only watches and both teams are NullAI, so no widget can
     # issue timing-dependent orders (required for bit-identical sync_repro runs)
@@ -72,10 +145,10 @@ def prepare_cell(cell, args, out_root):
 
     cmd = [
         cell.exe,
-        "--isolation", "--write-dir", args.data_dir,
+        "--isolation", "--write-dir", write_dir or args.data_dir,
         "--config", config_path,
-        "--workbench", args.only,
-        "--workbench-out", os.path.join(cell_dir, "results"),
+        "--workbench", ",".join(scenarios) if scenarios else args.only,
+        "--workbench-out", os.path.join(base_dir, "results"),
         "--workbench-timeout", str(args.timeout),
         "--workbench-profile", cell.profile,
         script_path,
@@ -121,8 +194,9 @@ def collect_infolog(data_dir, cell_dir, started):
     return True
 
 
-def run_cell(cell, args, out_root):
-    cell_dir, cmd = prepare_cell(cell, args, out_root)
+def run_cell(cell, args, out_root, scenarios=None, write_dir=None, shard_name=None):
+    cell_dir, cmd = prepare_cell(cell, args, out_root, scenarios, write_dir, shard_name)
+    data_dir = write_dir or args.data_dir
     started = datetime.datetime.now().timestamp()
     timed_out, code = False, None
     try:
@@ -130,23 +204,45 @@ def run_cell(cell, args, out_root):
     except subprocess.TimeoutExpired:
         timed_out = True
 
-    fresh_log = collect_infolog(args.data_dir, cell_dir, started)
+    fresh_log = collect_infolog(data_dir, cell_dir, started)
     infolog = os.path.join(cell_dir, "infolog.txt") if fresh_log else ""
     # per-frame sync checksums written by the sync_repro scenario (BAR dbg_synctest)
-    synchash = os.path.join(args.data_dir, "synctest_synchash.json")
+    synchash = os.path.join(data_dir, "synctest_synchash.json")
     if os.path.exists(synchash) and os.path.getmtime(synchash) >= started:
         shutil.move(synchash, os.path.join(cell_dir, "synchash.json"))
     status = status_for(code, timed_out)
     result = {
         "engine": cell.engine, "profile": cell.profile, "rep": cell.rep,
         "status": status, "exit_code": code,
-        "results_dir": os.path.join(cell_dir, "results"),
+        "results_dir": os.path.join(os.path.join(out_root, cell.engine, cell.profile, f"rep{cell.rep}"), "results"),
         "infolog_tail": tail_lines(infolog, 40) if status in ("error", "timeout") else [],
         "log_issues": [{"kind": k, "message": m} for k, m in scan_infolog(tail_lines(infolog, 10**7))],
     }
     with open(os.path.join(cell_dir, "cell.json"), "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
     return result
+
+
+def run_cell_sharded(cell, args, out_root):
+    """Runs the cell's scenarios as args.jobs engine instances at once and merges their results."""
+    names = resolve_scenarios(args.only, known_scenarios(args.data_dir, cell.exe))
+    shards = shard(names, args.jobs, SCENARIO_COSTS)
+    if len(shards) == 1:
+        return run_cell(cell, args, out_root)
+    work = []
+    for i, sc in enumerate(shards):
+        wd = make_write_dir(args.data_dir, os.path.join(out_root, "_writedirs", f"{cell.engine}-{cell.profile}-{cell.rep}-{i}"))
+        work.append((sc, wd, f"shard{i}"))
+    with concurrent.futures.ThreadPoolExecutor(len(work)) as pool:
+        parts = list(pool.map(lambda w: run_cell(cell, args, out_root, *w), work))
+    worst = max(parts, key=lambda r: STATUS_RANK.get(r["status"], 2))
+    merged = dict(worst)
+    merged["shards"] = [{"scenarios": w[0], "status": r["status"], "exit_code": r["exit_code"]} for w, r in zip(work, parts)]
+    merged["log_issues"] = [i for r in parts for i in r["log_issues"]]
+    base_dir = os.path.join(out_root, cell.engine, cell.profile, f"rep{cell.rep}")
+    with open(os.path.join(base_dir, "cell.json"), "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=2)
+    return merged
 
 
 def parse_args(argv):
@@ -159,6 +255,10 @@ def parse_args(argv):
     p.add_argument("--filter", default=None,
                    help="case name globs for generated scenarios, e.g. a unit name (comma separated)")
     p.add_argument("--reps", type=int, default=1)
+    p.add_argument("--jobs", type=int, default=1,
+                   help="engine instances per cell, each running a share of the scenarios (logic suites; "
+                        "timings from parallel instances are not comparable; on an 8-16 thread machine the sim's own "
+                        "thread pool already saturates the CPU and 3 jobs were slower than 1: measure first)")
     p.add_argument("--timeout", type=int, default=1800)
     p.add_argument("--map", default="Red Comet Remake 1.8")
     p.add_argument("--seed", type=int, default=0, help="FixedRNGSeed for reproducible runs (0 = random)")
@@ -192,7 +292,7 @@ def main(argv=None):
     summary = []
     for i, cell in enumerate(cells, 1):
         print(f"[{i}/{len(cells)}] {cell.engine} / {cell.profile} / rep {cell.rep} ...", flush=True)
-        r = run_cell(cell, args, out_root)
+        r = run_cell_sharded(cell, args, out_root) if args.jobs > 1 else run_cell(cell, args, out_root)
         print(f"    -> {r['status']} (exit {r['exit_code']})", flush=True)
         summary.append(r)
     with open(os.path.join(out_root, "summary.json"), "w", encoding="utf-8") as f:

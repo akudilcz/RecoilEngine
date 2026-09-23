@@ -174,3 +174,44 @@ class CollectInfolog(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Sharding(unittest.TestCase):
+    def test_globs_resolve_against_known_scenarios_in_order(self):
+        names = ["api_selftest", "mass_move_500", "mass_move_2000", "weapon_range", "weapon_range_all"]
+        self.assertEqual(run.resolve_scenarios("weapon_range*,api_selftest", names),
+                         ["weapon_range", "weapon_range_all", "api_selftest"])
+
+    def test_unknown_names_are_kept_so_the_engine_reports_them(self):
+        self.assertEqual(run.resolve_scenarios("nope", ["a"]), ["nope"])
+
+    def test_shards_balance_by_cost_and_never_come_back_empty(self):
+        costs = {"weapon_range_all": 100, "unit_movement": 40, "ship_movement": 10, "air_attack": 3}
+        shards = run.shard(["air_attack", "ship_movement", "unit_movement", "weapon_range_all"], 2, costs)
+        self.assertEqual(shards, [["weapon_range_all"], ["unit_movement", "ship_movement", "air_attack"]])
+        self.assertEqual(run.shard(["a"], 3, {}), [["a"]])
+
+    def test_scenario_names_are_found_in_game_and_engine_content(self):
+        with tempfile.TemporaryDirectory() as data, tempfile.TemporaryDirectory() as eng:
+            sc = os.path.join(data, "games", "BAR.sdd", "workbench", "scenarios")
+            os.makedirs(sc)
+            for n in ("b_game.lua", "a_game.lua"):
+                open(os.path.join(sc, n), "w").close()
+            os.makedirs(os.path.join(eng, "base"))
+            import zipfile
+            with zipfile.ZipFile(os.path.join(eng, "base", "springcontent.sdz"), "w") as z:
+                z.writestr("workbench/scenarios/api_selftest.lua", "")
+                z.writestr("workbench/harness.lua", "")
+            self.assertEqual(run.known_scenarios(data, os.path.join(eng, "spring.exe")),
+                             ["a_game", "api_selftest", "b_game"])
+
+    def test_shard_write_dir_shares_games_and_maps_but_not_luaui(self):
+        with tempfile.TemporaryDirectory() as data, tempfile.TemporaryDirectory() as out:
+            for d in ("games", "maps", "LuaUI"):
+                os.makedirs(os.path.join(data, d))
+            open(os.path.join(data, "devmode.txt"), "w").close()
+            wd = run.make_write_dir(data, os.path.join(out, "w1"))
+            self.assertTrue(os.path.isdir(os.path.join(wd, "games")))
+            self.assertTrue(os.path.isdir(os.path.join(wd, "maps")))
+            self.assertTrue(os.path.exists(os.path.join(wd, "devmode.txt")))
+            self.assertFalse(os.path.exists(os.path.join(wd, "LuaUI")))
