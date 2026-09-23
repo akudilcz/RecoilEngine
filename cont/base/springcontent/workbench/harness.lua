@@ -231,7 +231,7 @@ local function startNext()
 	if speedStart then
 		local frames = Spring.GetGameFrame() - speedStart.frame
 		local secs = Spring.DiffTimers(Spring.GetTimer(), speedStart.timer)
-		Spring.Log("Workbench", LOG.INFO, string.format("%s: %d sim frames in %.0f s (%.1fx real time)",
+		Spring.Log("Workbench", LOG.NOTICE, string.format("%s: %d sim frames in %.0f s (%.1fx real time)",
 			speedStart.name, frames, secs, secs > 0 and frames / Game.gameSpeed / secs or 0))
 		pinSimSpeed(1)
 		speedStart = nil
