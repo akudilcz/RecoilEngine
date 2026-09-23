@@ -151,6 +151,16 @@ def profile_sweep_rows(cells, engines, profiles):
     return rows
 
 
+def scenario_rows(cells):
+    """[(engine, profile, rep, scenario, checks passed, checks total)], scenarios sorted by name."""
+    rows = []
+    for c in cells:
+        for name in sorted(c["scenarios"]):
+            checks = c["scenarios"][name].get("checks", [])
+            rows.append((c["engine"], c["profile"], c["rep"], name, sum(1 for x in checks if x["pass"]), len(checks)))
+    return rows
+
+
 def write_report(out_root):
     cells = load_cells(out_root)
     engines = list(dict.fromkeys(c["engine"] for c in cells))
@@ -187,6 +197,16 @@ def write_report(out_root):
     parts.append(f"<h2>Summary</h2><p>{len(regs)} regressions, {len(imps)} improvements, "
                  f"{len(checks)} failed checks, {len(errors)} errored cells, "
                  f"{sum(len(c.get('log_issues', [])) for c in cells)} log issues.</p>")
+    srows = scenario_rows(cells)
+    if srows:
+        passed, total = sum(r[4] for r in srows), sum(r[5] for r in srows)
+        parts.append(f"<h2>Scenarios ({passed}/{total} checks passed)</h2><table><tr><th>engine</th><th>profile</th>"
+                     "<th>rep</th><th>scenario</th><th>checks</th></tr>")
+        for eng, prof, rep_, name, ok, n in srows:
+            cls = "improvement" if ok == n and n > 0 else ("regression" if ok < n else "")
+            parts.append(f"<tr class='{cls}'><td>{esc(eng)}</td><td>{esc(prof)}</td><td>{rep_}</td>"
+                         f"<td>{esc(name)}</td><td>{ok}/{n if n else '-'}</td></tr>")
+        parts.append("</table>")
     if errors:
         parts.append("<h2>Errors</h2><ul>")
         for c in errors:

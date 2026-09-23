@@ -120,3 +120,17 @@ class ProfileSweep(unittest.TestCase):
 
     def test_single_profile_has_no_sweep(self):
         self.assertEqual(report.profile_sweep_rows([self.cell("low", 5.0, 2.0)], ["dev"], ["low"]), [])
+
+
+class ScenarioRows(unittest.TestCase):
+    def test_pass_counts_per_cell_and_scenario(self):
+        cells = [{"engine": "dev", "profile": "default", "rep": 0, "scenarios": {
+            "b": {"checks": [{"pass": True}, {"pass": False}]},
+            "a": {"checks": [{"pass": True}]},
+            "perf": {"checks": [], "windows": [{}]},
+        }}]
+        self.assertEqual(report.scenario_rows(cells), [
+            ("dev", "default", 0, "a", 1, 1),
+            ("dev", "default", 0, "b", 1, 2),
+            ("dev", "default", 0, "perf", 0, 0),
+        ])
