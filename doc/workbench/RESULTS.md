@@ -25,3 +25,18 @@ Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-
 | peak memory | ~7.89 GB | ~7.88 GB | ~0% | same |
 
 The direction favours dev on rendering, but at this load and with 3 repetitions the differences stay inside the run-to-run noise, so the report does not claim them. Heavier scenarios (`mass_move_2000/5000`, `big_battle`) and more repetitions are needed to measure the patches' effect.
+
+## 2026-09-24: performance, heavy load (3 reps each, median of per-window p50)
+
+| Scenario / metric | base | dev | change | verdict |
+|---|---|---|---|---|
+| mass_move_2000 frame time | 26.85 ms | 25.92 ms | -3.5% | same |
+| mass_move_2000 sim | 16.58 ms | 16.23 ms | -2.1% | same |
+| mass_move_5000 frame time | 51.56 ms | 51.78 ms | +0.4% | same |
+| mass_move_5000 sim | 40.50 ms | 40.68 ms | +0.4% | same |
+| mass_move_5000 GPU | 34.14 ms | 33.00 ms | -3.3% | same (dev lower in all 3 runs) |
+| big_battle sim | 24.30 ms | 20.67 ms | -14.9% | **improvement** (just beyond base spread) |
+| big_battle frame time | 33.03 ms | 31.66 ms | -4.2% | same |
+| big_battle GPU | 34.43 ms | 32.33 ms | -6.1% | same |
+
+Caveats: base and dev do not simulate identical battles (merged community PRs change behaviour; see determinism above), so part of the `big_battle` sim difference may be a different fight rather than faster code. At 5000 units the frame is sim-bound (~40 ms/frame) and our patches do not move it: that is where the next optimisation work should go. Per-window profiler timings (added after this run) show which subsystems own that time.
