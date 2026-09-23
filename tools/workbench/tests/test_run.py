@@ -56,6 +56,21 @@ class PrepareCell(unittest.TestCase):
             with open(cfg) as a, open(os.path.join(run.HERE, "profiles", "default.cfg")) as b:
                 self.assertEqual(a.read(), b.read())
 
+    def test_filter_is_written_into_the_cell_config(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--only", "x",
+                                   "--filter", "corsiegebreaker,armp*"])
+            cell_dir, cmd = run.prepare_cell(run.Cell("dev", sys.executable, "default", 0), args, out)
+            with open(cmd[cmd.index("--config") + 1]) as f:
+                self.assertIn("WorkbenchFilter = corsiegebreaker,armp*", f.read().splitlines())
+
+    def test_no_filter_leaves_the_config_as_the_profile(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--only", "x"])
+            cell_dir, cmd = run.prepare_cell(run.Cell("dev", sys.executable, "default", 0), args, out)
+            with open(cmd[cmd.index("--config") + 1]) as f:
+                self.assertNotIn("WorkbenchFilter", f.read())
+
 
 class ScanInfolog(unittest.TestCase):
     def test_flags_widget_load_failures_but_not_helper_modules(self):

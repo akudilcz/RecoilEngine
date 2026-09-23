@@ -65,6 +65,10 @@ def prepare_cell(cell, args, out_root):
     # the engine writes settings back into its --config file, so give each cell its own copy
     config_path = os.path.join(cell_dir, "springsettings.cfg")
     shutil.copyfile(os.path.join(HERE, "profiles", cell.profile + ".cfg"), config_path)
+    if args.filter:
+        # generated scenarios (one case per unit type, ...) only run cases matching these globs
+        with open(config_path, "a", encoding="utf-8") as f:
+            f.write(f"\nWorkbenchFilter = {args.filter}\n")
 
     cmd = [
         cell.exe,
@@ -152,6 +156,8 @@ def parse_args(argv):
     p.add_argument("--only", default=None, help="scenario name pattern(s), comma separated globs")
     p.add_argument("--suite", default=None, help="named scenario set: " + ", ".join(SUITES))
     p.add_argument("--profile", action="append", default=None, help="settings profile name (repeatable)")
+    p.add_argument("--filter", default=None,
+                   help="case name globs for generated scenarios, e.g. a unit name (comma separated)")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--timeout", type=int, default=1800)
     p.add_argument("--map", default="Red Comet Remake 1.8")
