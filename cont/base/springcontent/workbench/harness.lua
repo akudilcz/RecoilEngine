@@ -52,11 +52,32 @@ end
 
 -- ------------------------------------------------------------------ synced side
 local syncedFns = {}
+local syncedCallins = {} -- callin name -> { {scenario, fn}, ... }
+
+-- synced callins a scenario may handle via `syncedCallins = { UnitDamaged = fn, ... }`;
+-- the game's gadget forwards them with H.SyncedCallin. Every loaded scenario's handlers
+-- run for the whole run, so a handler should only react to units its scenario made.
+H.SYNCED_CALLINS = { "UnitCreated", "UnitFinished", "UnitDamaged", "UnitDestroyed" }
 
 function H.StartSynced()
 	for _, sc in ipairs(loadScenarios(Spring.Workbench.GetPattern())) do
 		for fnName, fn in pairs(sc.synced or {}) do
 			syncedFns[sc.name .. "." .. fnName] = fn
+		end
+		for callin, fn in pairs(sc.syncedCallins or {}) do
+			syncedCallins[callin] = syncedCallins[callin] or {}
+			table.insert(syncedCallins[callin], { sc.name, fn })
+		end
+	end
+end
+
+function H.SyncedCallin(name, ...)
+	local handlers = syncedCallins[name]
+	if not handlers then return end
+	for _, h in ipairs(handlers) do
+		local ok, err = pcall(h[2], ...)
+		if not ok then
+			Spring.Log("Workbench", LOG.ERROR, h[1] .. " " .. name .. ": " .. tostring(err))
 		end
 	end
 end
