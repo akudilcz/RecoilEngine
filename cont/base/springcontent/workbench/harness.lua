@@ -100,6 +100,7 @@ end
 -- ---------------------------------------------------------------- unsynced side
 local queue, current, co, startedAt = {}, nil, nil, nil
 local frames, nextCallId = 0, 0
+local gameFrameQueue = {}
 
 local function send(callId, sc, fnName, ...)
 	local parts = { MSG_PREFIX .. callId, sc.name .. "." .. fnName }
@@ -157,6 +158,16 @@ local function makeCtx(sc)
 		end
 		return v
 	end
+	-- runs fn from the next GameFrame callin, i.e. during the sim step, before the
+	-- engine's GUI update fires CommandsChanged/SelectionChanged for that frame; this
+	-- is where physical input events land relative to widgets (emulated input issued
+	-- from Update would otherwise be seen by later widgets in the same pass). Waits
+	-- until fn has run.
+	function ctx.atNextGameFrame(fn)
+		local done = false
+		gameFrameQueue[#gameFrameQueue + 1] = function() fn(); done = true end
+		ctx.waitUntil(function() return done end, 30)
+	end
 	function ctx.log(msg)
 		Spring.Echo("[Workbench] " .. sc.name .. ": " .. tostring(msg))
 	end
@@ -185,6 +196,17 @@ function H.Start()
 		return
 	end
 	startNext()
+end
+
+-- call from the widget's GameFrame callin
+function H.GameFrame()
+	if #gameFrameQueue == 0 then return end
+	local q = gameFrameQueue
+	gameFrameQueue = {}
+	for _, fn in ipairs(q) do
+		local ok, err = pcall(fn)
+		if not ok then Spring.Log("Workbench", LOG.ERROR, "atNextGameFrame: " .. tostring(err)) end
+	end
 end
 
 -- call every LuaUI Update
