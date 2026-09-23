@@ -177,6 +177,8 @@ namespace Watchdog
 				// unattended workbench run: a hung main thread can never finish the run itself,
 				// so record the hang, write results and end the process for the runner
 				if (hangThreads[WDT_MAIN] && workbench.IsActive()) {
+					// error level: the log file flushes these, and _Exit skips the normal flush
+					LOG_L(L_ERROR, "[Workbench] main thread hung, ending the run (exit %d)", WORKBENCH_EXIT_ERROR);
 					workbench.OnHang(threadNames[WDT_MAIN]);
 					std::_Exit(WORKBENCH_EXIT_ERROR);
 				}
