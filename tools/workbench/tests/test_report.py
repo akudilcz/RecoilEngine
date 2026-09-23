@@ -66,5 +66,24 @@ class MemorySeries(unittest.TestCase):
         self.assertEqual(report._metric_series([cell], "dev", "default", "s", "w", "memPeakMB"), [])
 
 
+class Timers(unittest.TestCase):
+    def cell(self, engine, path_ms):
+        return {"engine": engine, "profile": "default", "scenarios": {"s": {"windows": [
+            {"name": "w", "frameTimeMs": {"count": 1, "p50": 1.0},
+             "timers": [{"name": "Sim::Path", "totalMs": path_ms, "perSimFrameMs": path_ms / 10, "perDrawFrameMs": path_ms / 20},
+                        {"name": "Draw", "totalMs": 5.0, "perSimFrameMs": 0.5, "perDrawFrameMs": 0.25}]}]}}}
+
+    def test_top_timers_by_baseline_cost(self):
+        cells = [self.cell("base", 100.0), self.cell("dev", 60.0)]
+        rows = report.timer_rows(cells, ["base", "dev"], "default", "s", "w", top=5)
+        self.assertEqual(rows[0][0], "Sim::Path")
+        self.assertEqual(rows[0][1], [10.0, 6.0])  # median perSimFrameMs per engine
+
+    def test_missing_timers_are_none(self):
+        cells = [self.cell("base", 100.0), {"engine": "dev", "profile": "default", "scenarios": {}}]
+        rows = report.timer_rows(cells, ["base", "dev"], "default", "s", "w", top=5)
+        self.assertEqual(rows[0][1], [10.0, None])
+
+
 if __name__ == "__main__":
     unittest.main()

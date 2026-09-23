@@ -89,6 +89,23 @@ def _metric_series(cells, engine, profile, scenario, window, metric):
     return out
 
 
+def timer_rows(cells, engines, profile, scenario, window, top=12):
+    """[(timer, [median perSimFrameMs per engine or None])] for the costliest timers of the first engine."""
+    per_engine = {}
+    for eng in engines:
+        values = {}
+        for c in cells:
+            if c["engine"] != eng or c["profile"] != profile:
+                continue
+            for w in (c["scenarios"].get(scenario) or {}).get("windows", []):
+                if w["name"] == window:
+                    for t in w.get("timers", []):
+                        values.setdefault(t["name"], []).append(t["perSimFrameMs"])
+        per_engine[eng] = {k: median(v) for k, v in values.items()}
+    order = sorted(per_engine.get(engines[0], {}).items(), key=lambda kv: -kv[1])[:top] if engines else []
+    return [(name, [per_engine[e].get(name) for e in engines]) for name, _ in order]
+
+
 def write_report(out_root):
     cells = load_cells(out_root)
     engines = list(dict.fromkeys(c["engine"] for c in cells))
@@ -167,6 +184,20 @@ def write_report(out_root):
         parts.append(f"<tr class='{cls}'><td>{esc(profile)}</td><td>{esc(scenario)}</td><td>{esc(window)}</td>"
                      f"<td>{esc(metric)}</td><td>{esc(eng)}</td><td>{val}</td><td>{esc(verdict)}</td></tr>")
     parts.append("</table>")
+    windows = sorted({(profile, scenario, window) for profile, scenario, window in keys})
+    timer_sections = []
+    for profile, scenario, window in windows:
+        rows_t = timer_rows(cells, engines, profile, scenario, window)
+        if not rows_t:
+            continue
+        head = "".join(f"<th>{esc(e)}</th>" for e in engines)
+        body = "".join(
+            f"<tr><td>{esc(name)}</td>" + "".join("<td></td>" if v is None else f"<td>{v:.2f}</td>" for v in vals) + "</tr>"
+            for name, vals in rows_t)
+        timer_sections.append(f"<h3>{esc(scenario)} / {esc(window)} ({esc(profile)})</h3>"
+                              f"<table><tr><th>timer (ms per sim frame)</th>{head}</tr>{body}</table>")
+    if timer_sections:
+        parts.append("<h2>Where time goes</h2>" + "".join(timer_sections))
     path = os.path.join(out_root, "compare.html")
     with open(path, "w", encoding="utf-8") as f:
         f.write("".join(parts))

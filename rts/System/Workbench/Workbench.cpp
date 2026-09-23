@@ -84,10 +84,29 @@ void CWorkbench::BeginWindow(const std::string& name)
 	w.simMs.reserve(WINDOW_RESERVE);
 	sc->windows.push_back(std::move(w));
 	inWindow = true;
+
+	timerSnapshot.clear();
+	if (timerSource) {
+		for (const auto& [name, ms]: timerSource())
+			timerSnapshot[name] = ms;
+	}
 }
 
 void CWorkbench::EndWindow()
 {
+	if (WorkbenchWindow* w = CurrentWindow(); w != nullptr && timerSource) {
+		static constexpr size_t MAX_TIMERS = 40;
+		w->timersMs.clear();
+		for (const auto& [name, ms]: timerSource()) {
+			const auto it = timerSnapshot.find(name);
+			const double delta = ms - (it == timerSnapshot.end() ? 0.0 : it->second);
+			if (delta > 0.0)
+				w->timersMs.emplace_back(name, delta);
+		}
+		std::sort(w->timersMs.begin(), w->timersMs.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+		if (w->timersMs.size() > MAX_TIMERS)
+			w->timersMs.resize(MAX_TIMERS);
+	}
 	inWindow = false;
 }
 
