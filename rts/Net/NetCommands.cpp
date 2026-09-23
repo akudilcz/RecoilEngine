@@ -40,6 +40,7 @@
 #include "System/Sync/DumpHistory.h"
 
 #include "System/Misc/TracyDefs.h"
+#include "System/Workbench/Workbench.h"
 
 CONFIG(bool, LogClientData).defaultValue(false);
 
@@ -615,7 +616,9 @@ void CGame::ClientReadNet()
 				msgProcTimeLeft -= 1000.0f;
 				lastSimFrameNetPacketTime = spring_gettime();
 
+				const spring_time wbSimStart = spring_gettime();
 				SimFrame();
+				const float wbSimMs = (spring_gettime() - wbSimStart).toMilliSecsf();
 
 #ifdef SYNCCHECK
 				// both NETMSG_SYNCRESPONSE and NETMSG_NEWFRAME are used for ping calculation by server
@@ -637,6 +640,13 @@ void CGame::ClientReadNet()
 				if ((gs->frameNum & 4095) == 0)
 					CSyncChecker::NewFrame();
 #endif
+				if (workbench.IsActive()) {
+#ifdef SYNCCHECK
+					workbench.OnSimFrame(gs->frameNum, wbSimMs, CSyncChecker::GetPrevChecksum(), true);
+#else
+					workbench.OnSimFrame(gs->frameNum, wbSimMs, 0, false);
+#endif
+				}
 				AddTraffic(-1, packetCode, dataLength);
 			} break;
 

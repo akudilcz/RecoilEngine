@@ -80,6 +80,8 @@
 #include "Sim/Misc/BuildingMaskMap.h"
 #include "Sim/Misc/LosHandler.h"
 #include "Sim/Misc/ModInfo.h"
+#include "Game/GameVersion.h"
+#include "System/Workbench/Workbench.h"
 #include "Sim/Misc/InterceptHandler.h"
 #include "Sim/Misc/QuadField.h"
 #include "Sim/Misc/SideParser.h"
@@ -1178,6 +1180,7 @@ int CGame::TextEditing(const std::string& utf8Text, unsigned int start, unsigned
 bool CGame::Update()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	workbench.Update(spring_gettime().toSecsf());
 	good_fpu_control_registers("CGame::Update");
 
 	jobDispatcher.Update();
@@ -1562,6 +1565,19 @@ bool CGame::Draw() {
 	const spring_time currentTimePostDraw = spring_gettime();
 	const spring_time currentFrameDrawTime = currentTimePostDraw - currentTimePreDraw;
 	gu->avgDrawFrameTime = mix(gu->avgDrawFrameTime, currentFrameDrawTime.toMilliSecsf(), 0.05f);
+
+	if (workbench.IsActive()) {
+		static bool workbenchInfoSet = false;
+		if (!workbenchInfoSet) {
+			workbench.SetEngineInfo(SpringVersion::GetFull(), modInfo.humanNameVersioned);
+			workbenchInfoSet = true;
+		}
+		// GPU time of the previous frame; the query is non-blocking and returns the last value if not ready
+		const float gpuMs = globalRendering->CalcGLDeltaTime(CGlobalRendering::FRAME_REF_TIME_QUERY_IDX, CGlobalRendering::FRAME_END_TIME_QUERY_IDX) * 1e-6f;
+		workbench.OnDrawFrame(globalRendering->lastFrameTime, currentFrameDrawTime.toMilliSecsf(), gpuMs);
+		if (const int stall = workbench.GetFrameStall(); stall > 0)
+			spring_sleep(spring_msecs(stall));
+	}
 
 	eventHandler.DbgTimingInfo(TIMING_VIDEO, currentTimePreDraw, currentTimePostDraw);
 	globalRendering->SetGLTimeStamp(CGlobalRendering::FRAME_END_TIME_QUERY_IDX);
