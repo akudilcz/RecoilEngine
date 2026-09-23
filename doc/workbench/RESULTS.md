@@ -4,6 +4,10 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-09-24: game logic coverage, update (dev, max sim speed)
+
+After the fixes below, the whole logic set passes: `unit_movement` 346/346, `ship_movement` 104/104, `weapon_range_all` 238/238, `air_attack` 18/18, `unit_behaviours` 41/41 (restricted to the tech tree players can reach; the earlier 94 included scavenger and evolution-only defs). Wall clock: 219 s for all five, against ~58 min at 1x.
+
 ## 2026-09-24: game logic coverage (dev, flat arena)
 
 Generated from the game's defs, so new units are covered without writing tests. Every failure names what happened (which unit and weapon hit, which weapons fired, how far short a unit stopped).

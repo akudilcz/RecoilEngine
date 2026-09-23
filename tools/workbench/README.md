@@ -15,7 +15,7 @@ Design: [`doc/superpowers/specs/2026-09-23-workbench-design.md`](../../doc/super
 wsl -d Ubuntu -- bash /mnt/c/Workspace/bar/RecoilEngine/tools/workbench/wsl-build.sh
 wsl -d Ubuntu -- bash /mnt/c/Workspace/bar/RecoilEngine/tools/workbench/deploy.sh /mnt/c/Workspace/bar/engine-dev
 
-# 2. run the smoke suite (~10 min) and open the report
+# 2. run the smoke suite (~2 min) and open the report
 python tools/workbench/run.py --suite smoke --engine dev=C:/Workspace/bar/engine-dev/spring.exe \
     --data-dir C:/Workspace/bar/data
 ```
@@ -94,11 +94,13 @@ return {
 }
 ```
 
-`ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSeconds(s)`, `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)` (fire and forget), `call(fn, ...) -> value | nil, err` (runs a synced function and waits for its return value), `atNextGameFrame(fn)` (runs fn during the next sim step, before the GUI update; use it for emulated input that must land where physical input does), `log(msg)`.
+Game-logic scenarios should set `simSpeed = "max"`: the harness pins the sim to 100x (in practice 22-34x, CPU-bound) for that scenario and back to 1x afterwards, so performance and UI scenarios always run in real time. Such scenarios must wait in sim time (`waitSimFrames`, `waitSimSeconds`); `waitSeconds` is wall-clock. The full logic set (every ground unit's movement and range, every ship, aircraft, factory and builder: 747 checks) takes about 3.5 minutes instead of an hour.
+
+`ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSimSeconds(s)`, `waitSeconds(s)` (wall clock), `wants(caseName)` (honours `--filter`), `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)` (fire and forget), `call(fn, ...) -> value | nil, err` (runs a synced function and waits for its return value), `atNextGameFrame(fn)` (runs fn during the next sim step, before the GUI update; use it for emulated input that must land where physical input does), `log(msg)`.
 
 A scenario can also handle synced callins, for exact attribution (which unit hit what, with which weapon): `syncedCallins = { UnitDamaged = function(unitID, unitDefID, team, damage, paralyzer, weaponDefID, projectileID, attackerID, attackerDefID) ... end }`. Supported: `UnitCreated`, `UnitFinished`, `UnitDamaged`, `UnitDestroyed` (`harness.SYNCED_CALLINS`; the game's gadget forwards them). Every loaded scenario's handlers run for the whole run, so react only to units your scenario made. Errors in handlers are logged and flagged in the report.
 
-Per-unit checks should measure the unit, not the map: BAR's `workbench/lib/arena.lua` levels the terrain (`prepare(height)`; a negative height floods it for ships), removes features, turns global LOS off and makes pre-existing units hold fire; `clear` removes everything the scenario made, including projectiles still in flight (`synced = { prepare = arena.prepare, clear = arena.clear }`). BAR's `workbench/lib/movement.lua` and `workbench/lib/weapons.lua` generate per-unit-type checks.
+Per-unit checks should measure the unit, not the map: BAR's `workbench/lib/arena.lua` levels the terrain (`prepare(height)`; a negative height floods it for ships), removes features, turns global LOS off and makes pre-existing units hold fire; `clear` removes everything the scenario made, including projectiles still in flight, and re-levels the ground (craters from earlier batches block flat-trajectory weapons); `arena.sweep(ctx)` clears twice around a pause for delayed death effects (`synced = { prepare = arena.prepare, clear = arena.clear }`). Test units that need no player interaction belong to a team the local player does not control, so no player widget gives them orders. `workbench/lib/techtree.lua` lists the units players can actually build. BAR's `workbench/lib/movement.lua` and `workbench/lib/weapons.lua` generate per-unit-type checks.
 
 `ctx.call` never raises: Lua 5.1 cannot yield inside `pcall`, so check its second return value instead. Read enemy or hidden state through `ctx.call` rather than unsynced Lua, which only sees what the local player can see.
 
