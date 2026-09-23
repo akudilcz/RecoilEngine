@@ -1,3 +1,39 @@
+# akudilcz/RecoilEngine: a high-performance, well-tested Recoil fork
+
+This fork of [Recoil](https://github.com/beyond-all-reason/RecoilEngine) exists to keep a **faster, bug-free variant of Beyond All Reason** running. It is paired with the game fork [akudilcz/Beyond-All-Reason](https://github.com/akudilcz/Beyond-All-Reason).
+
+It carries three things on top of upstream:
+
+1. **Performance patches**: rendering, simulation, pathfinding and Lua API optimisations, all behaviour-neutral for the synced simulation. Examples: model uniforms re-uploaded only when they change, batched units under construction, water reflection skipped when no water is in view, instanced grass, parallel LOS status and transform snapshots, a per-frame `GetVisibleUnits` cache, and fewer allocations in QTPFS.
+2. **Fixes**: our own (e.g. drag-build at low frame rates losing Shift because key modifiers were read from the end of the event batch) plus reviewed community pull requests that upstream hasn't merged yet.
+3. **The Recoil Workbench** *(in development)*: a test environment built into the engine that runs the real engine and game like a player would, measures performance, checks every unit's behaviour, and verifies the simulation replays bit-identically. It gates everything that goes into this fork. Design: [`doc/superpowers/specs/2026-09-23-workbench-design.md`](doc/superpowers/specs/2026-09-23-workbench-design.md).
+
+### Rules for what goes in
+
+- Community PRs are merged one at a time after review, if they are low-to-medium risk: bug fixes, performance work, and minor UX or gameplay improvements. Major rewrites of core systems, drafts, and changes to default controls or balance stay out.
+- Changes to synced simulation code must not change results. Anything that could must pass a desync/replay check first.
+- Multiplayer note: synced changes only desync against players running a *different* engine build. Single-player and local games are unaffected; for online play, everyone needs the same build.
+
+### Building (Windows host)
+
+Docker builds are very slow when the source lives on the Windows disk, so build from a WSL mirror:
+
+    wsl -d Ubuntu -- bash /mnt/c/Workspace/bar/RecoilEngine/tools/workbench/wsl-build.sh
+
+This rsyncs the checkout into WSL and runs `docker-build-v2/build.sh` for `engine-legacy` and `basecontent`. Pass other targets as arguments.
+
+### Staying in sync with upstream
+
+`origin` points at upstream, `fork` at this repository:
+
+    git fetch origin
+    git merge origin/master      # resolve conflicts where upstream touched the same code
+    git push fork master
+
+Upstream changes go through the workbench before they're pushed, once it's available.
+
+---
+
 # Recoil is an open source real time strategy game engine
 
 Visit the [Official Website](https://recoilengine.org)
