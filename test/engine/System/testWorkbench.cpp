@@ -130,3 +130,28 @@ TEST_CASE("FinishRun with no scenarios is an error")
 	wb.FinishRun();
 	CHECK(wb.GetExitCode() == 2);
 }
+
+TEST_CASE("Engine shutdown before FinishRun is an error, not a silent pass")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("s");
+	wb.AddCheck("c", true, "");
+	wb.OnShutdown(); // e.g. the game ended because a scenario destroyed every commander
+	CHECK(wb.IsFinished());
+	CHECK(wb.GetExitCode() == 2);
+	CHECK(wb.GetScenarios()[0].error == "engine shut down before the scenario finished");
+}
+
+TEST_CASE("OnShutdown after FinishRun keeps the result")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("s");
+	wb.AddCheck("c", true, "");
+	wb.FinishRun();
+	wb.OnShutdown();
+	CHECK(wb.GetExitCode() == 0);
+}
