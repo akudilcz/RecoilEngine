@@ -18,6 +18,7 @@ SUITES = {
     "smoke": "api_selftest,render_baseline,mass_move_500,weapon_range",   # ~10 min
     "standard": "api_selftest,render_baseline,mass_move_*,weapon_range,unit_movement",
     "determinism": "sync_repro",  # use with --spectate --seed N
+    "full": "api_selftest,render_baseline,mass_move_*,weapon_range_all,unit_movement",  # hours
 }
 
 
