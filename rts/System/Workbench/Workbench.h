@@ -33,6 +33,8 @@ public:
 	void OnShutdown();
 	// fatal error / crash: record it against the running scenario and write results
 	void OnCrash(const std::string& msg);
+	// hang detector (watchdog thread): the caller terminates the process afterwards
+	void OnHang(const std::string& threadName);
 
 	void OnDrawFrame(float frameMs, float drawMs, float gpuMs);
 	void OnSimFrame(int frameNum, float simMs, unsigned checksum, bool checksumValid);

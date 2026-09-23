@@ -184,6 +184,15 @@ void CWorkbench::OnCrash(const std::string& msg)
 	FinishRun();
 }
 
+void CWorkbench::OnHang(const std::string& threadName)
+{
+	if (!active || finished)
+		return;
+	SetScenarioError("engine hung: thread " + threadName + " unresponsive");
+	SetRunError("engine hung: thread " + threadName + " unresponsive");
+	FinishRun();
+}
+
 void CWorkbench::FinishRun()
 {
 	if (finished)
