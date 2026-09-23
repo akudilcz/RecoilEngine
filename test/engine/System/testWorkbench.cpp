@@ -4,6 +4,7 @@
 #include "System/Workbench/WorkbenchResults.h"
 
 #include <algorithm>
+#include <filesystem>
 
 #include <catch_amalgamated.hpp>
 
@@ -112,6 +113,7 @@ TEST_CASE("Watchdog ends the run with exit code 2")
 	wb.SetClockForTest([&]() { return now; });
 	wb.Configure("x", "", 5, "default");
 	wb.BeginScenario("s");
+	wb.Update(0.0f); // the first Update starts the watchdog
 	now = 4.0f;
 	wb.Update(now);
 	CHECK_FALSE(wb.IsFinished());
@@ -215,4 +217,58 @@ TEST_CASE("A hang of the main thread is recorded against the running scenario")
 	CHECK(wb.IsFinished());
 	CHECK(wb.GetExitCode() == 2);
 	CHECK(wb.GetScenarios()[0].error == "engine hung: thread main unresponsive");
+}
+
+TEST_CASE("Watchdog measures from the first Update, not from Configure")
+{
+	// the engine switches clock sources between flag parsing (Configure) and the game loop
+	float now = 1000000.0f; // a different clock epoch at Configure time
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.SetClockForTest([&]() { return now; });
+	wb.Configure("x", "", 5, "default");
+	wb.BeginScenario("s");
+	wb.Update(3.0f); // game loop clock: first call starts the watchdog
+	CHECK_FALSE(wb.IsFinished());
+	wb.Update(7.0f);
+	CHECK_FALSE(wb.IsFinished());
+	wb.Update(8.5f);
+	CHECK(wb.IsFinished());
+}
+
+TEST_CASE("Inactive workbench ignores run control calls")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("", "", 60, "default"); // no --workbench
+	wb.SetRunError("x");
+	wb.SetFrameStall(50);
+	wb.FinishRun();
+	CHECK_FALSE(wb.IsFinished());
+	CHECK(wb.GetFrameStall() == 0);
+}
+
+TEST_CASE("Workbench refuses games with other humans")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.ValidateGame(2);
+	CHECK_FALSE(wb.IsActive());
+
+	CWorkbench solo;
+	solo.writeFiles = false;
+	solo.Configure("x", "", 60, "default");
+	solo.ValidateGame(1);
+	CHECK(solo.IsActive());
+}
+
+TEST_CASE("WriteJsonFile creates missing directories")
+{
+	const std::string dir = "wb_test_out/nested/deeper";
+	std::error_code ec;
+	std::filesystem::remove_all("wb_test_out", ec);
+	CHECK(WriteJsonFile(dir + "/x.json", Json::Value(1)));
+	CHECK(std::filesystem::exists(dir + "/x.json"));
+	std::filesystem::remove_all("wb_test_out", ec);
 }

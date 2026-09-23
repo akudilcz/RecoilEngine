@@ -269,6 +269,7 @@ CGame::CGame(const std::string& mapFileName, const std::string& modFileName, ILo
 
 	// needed for LuaIntro (pushes LuaConstGame)
 	assert(mapInfo == nullptr);
+	workbench.ValidateGame(gameSetup->GetPlayerStartingDataCont().size());
 	mapInfo = new CMapInfo(mapFileName, gameSetup->mapName);
 
 	if (!sideParser.Load())
