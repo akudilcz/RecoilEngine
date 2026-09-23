@@ -297,3 +297,16 @@ TEST_CASE("Windows record per-timer time spent inside the window")
 	CHECK(j["windows"][0]["timers"][0]["name"].asString() == "Sim::Path");
 	CHECK(j["windows"][0]["timers"][0]["perSimFrameMs"].asDouble() == Catch::Approx(15.0));
 }
+
+TEST_CASE("Forced draws of a minimised window are not recorded as frames")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("s");
+	wb.BeginWindow("w");
+	wb.OnDrawFrame(16.0f, 5.0f, 4.0f);
+	wb.OnDrawFrame(30000.0f, 5.0f, 4.0f); // the engine force-draws a minimised window every 30 s
+	wb.EndWindow();
+	CHECK(wb.GetScenarios()[0].windows[0].frameMs.size() == 1);
+}

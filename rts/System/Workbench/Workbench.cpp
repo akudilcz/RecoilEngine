@@ -137,6 +137,11 @@ void CWorkbench::SetRunError(const std::string& msg)
 
 void CWorkbench::OnDrawFrame(float frameMs, float drawMs, float gpuMs)
 {
+	// a minimised window is force-drawn every 30 s; that is not a real frame
+	static constexpr float MAX_REAL_FRAME_MS = 5000.0f;
+	if (frameMs > MAX_REAL_FRAME_MS)
+		return;
+
 	if (WorkbenchWindow* w = CurrentWindow(); w != nullptr) {
 		w->frameMs.push_back(frameMs);
 		w->drawMs.push_back(drawMs);

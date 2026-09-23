@@ -503,6 +503,7 @@ void SpringApp::ParseCmdLine(int argc, char* argv[])
 		if (out.empty())
 			out = (FLAGS_write_dir.empty() ? std::string(".") : FLAGS_write_dir) + "/workbench";
 		workbench.Configure(FLAGS_workbench, out, FLAGS_workbench_timeout, FLAGS_workbench_profile);
+		workbench.SetEngineInfo(SpringVersion::GetFull(), ""); // game name is filled in once loaded
 
 		// per-window subsystem timings; the profiler only records special timers while disabled,
 		// and CTimeProfiler::ResetState (startup, thread pool resize) disables it again, so the
@@ -912,6 +913,8 @@ bool SpringApp::Update()
 	configHandler->Update();
 	globalRendering->UpdateWindow();
 	globalRendering->UpdateTimer();
+	// also runs before the game exists, so a pregame that never starts still times out
+	workbench.Update(spring_gettime().toSecsf());
 
 	#if 0
 	if (activeController == nullptr)
