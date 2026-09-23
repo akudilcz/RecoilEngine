@@ -41,6 +41,7 @@
 
 #include "System/Misc/TracyDefs.h"
 #include "System/Workbench/Workbench.h"
+#include "System/Workbench/WorkbenchMemory.h"
 
 CONFIG(bool, LogClientData).defaultValue(false);
 
@@ -646,6 +647,7 @@ void CGame::ClientReadNet()
 #else
 					workbench.OnSimFrame(gs->frameNum, wbSimMs, 0, false);
 #endif
+					workbench.OnMemorySample(GetProcessResidentBytes());
 				}
 				AddTraffic(-1, packetCode, dataLength);
 			} break;

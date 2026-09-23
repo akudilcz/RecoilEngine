@@ -203,6 +203,7 @@ endif()
 			"${ENGINE_SOURCE_DIR}/System/Workbench/WorkbenchStats.cpp"
 			"${ENGINE_SOURCE_DIR}/System/Workbench/WorkbenchResults.cpp"
 			"${ENGINE_SOURCE_DIR}/System/Workbench/Workbench.cpp"
+			"${ENGINE_SOURCE_DIR}/System/Workbench/WorkbenchMemory.cpp"
 			"${ENGINE_SOURCE_DIR}/System/Misc/SpringTime.cpp"
 			${test_Common_sources}
 		)

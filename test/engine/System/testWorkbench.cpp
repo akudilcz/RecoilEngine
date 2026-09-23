@@ -167,3 +167,40 @@ TEST_CASE("A crash during a scenario is recorded against that scenario")
 	CHECK(wb.GetExitCode() == 2);
 	CHECK(wb.GetScenarios()[0].error == "engine crashed: Access violation (0xc0000005)");
 }
+
+#include "System/Workbench/WorkbenchMemory.h"
+
+TEST_CASE("Process resident memory is readable")
+{
+	CHECK(GetProcessResidentBytes() > 0);
+}
+
+TEST_CASE("Windows record memory start, peak and end")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("s");
+	wb.OnMemorySample(100u << 20); // outside a window: ignored
+	wb.BeginWindow("w");
+	wb.OnMemorySample(200u << 20);
+	wb.OnMemorySample(500u << 20);
+	wb.OnMemorySample(300u << 20);
+	wb.EndWindow();
+	const WorkbenchWindow& w = wb.GetScenarios()[0].windows[0];
+	CHECK(w.memStartMB == Catch::Approx(200.0));
+	CHECK(w.memPeakMB == Catch::Approx(500.0));
+	CHECK(w.memEndMB == Catch::Approx(300.0));
+}
+
+TEST_CASE("Memory appears in the scenario JSON")
+{
+	WorkbenchWindow w;
+	w.name = "w";
+	w.memStartMB = 1.0;
+	w.memPeakMB = 3.0;
+	w.memEndMB = 2.0;
+	const Json::Value j = ScenarioToJson({"s", {w}, {}, ""}, {});
+	CHECK(j["windows"][0]["memoryMB"]["peak"].asDouble() == Catch::Approx(3.0));
+	CHECK(j["windows"][0]["memoryMB"]["growth"].asDouble() == Catch::Approx(1.0));
+}
