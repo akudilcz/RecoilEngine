@@ -41,7 +41,10 @@ def prepare_cell(cell, args, out_root):
     """Writes the cell's start script and config, returns (cell_dir, command)."""
     cell_dir = os.path.join(out_root, cell.engine, cell.profile, f"rep{cell.rep}")
     os.makedirs(cell_dir, exist_ok=True)
-    with open(os.path.join(HERE, "templates", "startscript.txt"), encoding="utf-8") as f:
+    # --spectate: the local player only watches and both teams are NullAI, so no widget can
+    # issue timing-dependent orders (required for bit-identical sync_repro runs)
+    template = "startscript_spectate.txt" if args.spectate else "startscript.txt"
+    with open(os.path.join(HERE, "templates", template), encoding="utf-8") as f:
         script = render_startscript(f.read(), args.map, args.seed)
     script_path = os.path.join(cell_dir, "startscript.txt")
     with open(script_path, "w", encoding="utf-8") as f:
@@ -127,6 +130,8 @@ def parse_args(argv):
     p.add_argument("--timeout", type=int, default=1800)
     p.add_argument("--map", default="Red Comet Remake 1.8")
     p.add_argument("--seed", type=int, default=0, help="FixedRNGSeed for reproducible runs (0 = random)")
+    p.add_argument("--spectate", action="store_true",
+                   help="local player spectates, NullAI controls both teams (determinism runs)")
     p.add_argument("--out", default=os.path.join(HERE, "results"))
     p.add_argument("--no-report", action="store_true")
     args = p.parse_args(argv)

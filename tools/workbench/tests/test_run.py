@@ -85,5 +85,23 @@ class Seed(unittest.TestCase):
         self.assertIn("FixedRNGSeed=0;", run.render_startscript("FixedRNGSeed=$SEED;", "M"))
 
 
+class Spectate(unittest.TestCase):
+    def test_spectate_uses_spectator_player_and_null_ai_teams(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--spectate"])
+            cell_dir, cmd = run.prepare_cell(run.Cell("dev", sys.executable, "default", 0), args, out)
+            with open(cmd[-1], encoding="utf-8") as f:
+                script = f.read()
+            self.assertIn("Spectator=1;", script)
+            self.assertEqual(script.count("ShortName=NullAI;"), 2)
+
+    def test_default_is_a_playing_player(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out])
+            cell_dir, cmd = run.prepare_cell(run.Cell("dev", sys.executable, "default", 0), args, out)
+            with open(cmd[-1], encoding="utf-8") as f:
+                self.assertIn("Spectator=0;", f.read())
+
+
 if __name__ == "__main__":
     unittest.main()

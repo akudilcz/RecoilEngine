@@ -15,6 +15,11 @@ SRC_WIN="${SRC_WIN:-/mnt/c/Workspace/bar/RecoilEngine}"
 SRC_WSL="${SRC_WSL:-$HOME/bar/RecoilEngine}"
 JOBS="${JOBS:-$(nproc)}"
 
+if [ -f "$SRC_WIN/.git" ]; then
+	echo "$SRC_WIN is a git worktree (.git is a file pointing at a Windows path); the build needs git inside WSL/docker. Use a real clone (git clone --no-local) instead." >&2
+	exit 1
+fi
+
 mkdir -p "$SRC_WSL"
 rsync -a --delete --exclude 'build-*/' --exclude '.cache/' --exclude '.superpowers/' "$SRC_WIN/" "$SRC_WSL/"
 cd "$SRC_WSL"
