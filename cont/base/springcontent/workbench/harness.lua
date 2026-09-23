@@ -7,6 +7,8 @@
 --   return {
 --     name = "unique_name",           -- matched against the --workbench pattern (comma-separated globs)
 --     timeout = 120,                  -- seconds, optional (default 300)
+--     simSpeed = "max",               -- optional: run the sim as fast as possible (logic checks;
+--                                     -- wait with waitSimFrames/waitSimSeconds)
 --     run = function(ctx) ... end,    -- runs as a coroutine in LuaUI
 --     synced = { fn = function(...) end }, -- optional; ctx.synced("fn", ...) fires and forgets,
 --                                          -- ctx.call("fn", ...) waits and returns value or nil, err
@@ -154,6 +156,9 @@ local function makeCtx(sc)
 		local t0 = Spring.GetTimer()
 		while Spring.DiffTimers(Spring.GetTimer(), t0) < s do coroutine.yield() end
 	end
+	function ctx.waitSimSeconds(s)
+		ctx.waitSimFrames(math.ceil(s * Game.gameSpeed))
+	end
 	function ctx.waitUntil(pred, timeoutSec)
 		local t0 = Spring.GetTimer()
 		while not pred() do
@@ -206,7 +211,31 @@ local function makeCtx(sc)
 	return ctx
 end
 
+-- game-logic scenarios can run the simulation as fast as the CPU allows:
+-- `simSpeed = "max"` (or a factor) in the scenario. The speed is pinned (min = max)
+-- for the scenario and pinned back to 1x afterwards, so performance scenarios always
+-- run in real time. Such scenarios must wait in sim time (waitSimFrames,
+-- waitSimSeconds), never waitSeconds.
+local MAX_SIM_SPEED = 100
+local speedStart
+
+local function pinSimSpeed(speed)
+	if speed > 1 then
+		Spring.SendCommands("setmaxspeed " .. speed, "setminspeed " .. speed)
+	else
+		Spring.SendCommands("setminspeed " .. speed, "setmaxspeed " .. speed)
+	end
+end
+
 local function startNext()
+	if speedStart then
+		local frames = Spring.GetGameFrame() - speedStart.frame
+		local secs = Spring.DiffTimers(Spring.GetTimer(), speedStart.timer)
+		Spring.Log("Workbench", LOG.INFO, string.format("%s: %d sim frames in %.0f s (%.1fx real time)",
+			speedStart.name, frames, secs, secs > 0 and frames / Game.gameSpeed / secs or 0))
+		pinSimSpeed(1)
+		speedStart = nil
+	end
 	current = table.remove(queue, 1)
 	if not current then
 		co = nil
@@ -215,6 +244,10 @@ local function startNext()
 	end
 	Spring.Workbench.BeginScenario(current.name)
 	startedAt = Spring.GetTimer()
+	if current.simSpeed then
+		pinSimSpeed(current.simSpeed == "max" and MAX_SIM_SPEED or tonumber(current.simSpeed) or 1)
+		speedStart = { name = current.name, frame = Spring.GetGameFrame(), timer = Spring.GetTimer() }
+	end
 	local ctx = makeCtx(current)
 	co = coroutine.create(function() current.run(ctx) end)
 end
