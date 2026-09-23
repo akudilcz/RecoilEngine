@@ -20,6 +20,10 @@
 #include "System/StringHash.h"
 #include "System/Threading/SpringThreading.h"
 #include "System/UnorderedMap.hpp"
+#if !defined(DEDICATED)
+#include "System/Workbench/Workbench.h"
+#endif
+#include <cstdlib>
 
 CONFIG(int, HangTimeout).defaultValue(60).minimumValue(-1).maximumValue(600)
 		.description("Number of seconds that, if spent in the same code segment, indicate a hang; -1 to disable.");
@@ -168,6 +172,15 @@ namespace Watchdog
 				}
 
 				CrashHandler::CleanupStacktrace(LOG_LEVEL_WARNING);
+
+				#if !defined(DEDICATED)
+				// unattended workbench run: a hung main thread can never finish the run itself,
+				// so record the hang, write results and end the process for the runner
+				if (hangThreads[WDT_MAIN] && workbench.IsActive()) {
+					workbench.OnHang(threadNames[WDT_MAIN]);
+					std::_Exit(WORKBENCH_EXIT_ERROR);
+				}
+				#endif
 			}
 
 			spring::this_thread::sleep_for(std::chrono::seconds(1));

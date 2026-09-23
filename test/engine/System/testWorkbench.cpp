@@ -204,3 +204,15 @@ TEST_CASE("Memory appears in the scenario JSON")
 	CHECK(j["windows"][0]["memoryMB"]["peak"].asDouble() == Catch::Approx(3.0));
 	CHECK(j["windows"][0]["memoryMB"]["growth"].asDouble() == Catch::Approx(1.0));
 }
+
+TEST_CASE("A hang of the main thread is recorded against the running scenario")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("sync_repro");
+	wb.OnHang("main");
+	CHECK(wb.IsFinished());
+	CHECK(wb.GetExitCode() == 2);
+	CHECK(wb.GetScenarios()[0].error == "engine hung: thread main unresponsive");
+}
