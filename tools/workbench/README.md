@@ -96,7 +96,9 @@ return {
 
 `ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSeconds(s)`, `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)` (fire and forget), `call(fn, ...) -> value | nil, err` (runs a synced function and waits for its return value), `atNextGameFrame(fn)` (runs fn during the next sim step, before the GUI update; use it for emulated input that must land where physical input does), `log(msg)`.
 
-Per-unit checks should measure the unit, not the map: BAR's `workbench/lib/arena.lua` levels the terrain, removes features, turns global LOS off and makes pre-existing units hold fire (`synced = { prepare = arena.prepare, clear = arena.clear }`).
+A scenario can also handle synced callins, for exact attribution (which unit hit what, with which weapon): `syncedCallins = { UnitDamaged = function(unitID, unitDefID, team, damage, paralyzer, weaponDefID, projectileID, attackerID, attackerDefID) ... end }`. Supported: `UnitCreated`, `UnitFinished`, `UnitDamaged`, `UnitDestroyed` (`harness.SYNCED_CALLINS`; the game's gadget forwards them). Every loaded scenario's handlers run for the whole run, so react only to units your scenario made. Errors in handlers are logged and flagged in the report.
+
+Per-unit checks should measure the unit, not the map: BAR's `workbench/lib/arena.lua` levels the terrain (`prepare(height)`; a negative height floods it for ships), removes features, turns global LOS off and makes pre-existing units hold fire; `clear` removes everything the scenario made, including projectiles still in flight (`synced = { prepare = arena.prepare, clear = arena.clear }`). BAR's `workbench/lib/movement.lua` and `workbench/lib/weapons.lua` generate per-unit-type checks.
 
 `ctx.call` never raises: Lua 5.1 cannot yield inside `pcall`, so check its second return value instead. Read enemy or hidden state through `ctx.call` rather than unsynced Lua, which only sees what the local player can see.
 
