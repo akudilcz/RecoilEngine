@@ -36,6 +36,7 @@ public:
 
 	void OnDrawFrame(float frameMs, float drawMs, float gpuMs);
 	void OnSimFrame(int frameNum, float simMs, unsigned checksum, bool checksumValid);
+	void OnMemorySample(size_t residentBytes);
 	void Update(float nowSec);
 
 	void SetEngineInfo(const std::string& engineVersion, const std::string& gameName);

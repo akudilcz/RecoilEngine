@@ -13,6 +13,9 @@ struct WorkbenchWindow {
 	std::vector<float> gpuMs;   // GPU time of the previous frame (async timer query)
 	std::vector<float> simMs;   // CPU time per SimFrame
 	int simFrames = 0;
+	double memStartMB = 0.0; // process resident memory at the first sample in the window
+	double memPeakMB = 0.0;
+	double memEndMB = 0.0;
 };
 
 struct WorkbenchCheck {

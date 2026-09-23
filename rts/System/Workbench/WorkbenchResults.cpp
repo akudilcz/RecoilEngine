@@ -43,6 +43,10 @@ Json::Value ScenarioToJson(const WorkbenchScenario& scenario, const WorkbenchRun
 		jw["gpuTimeMs"] = SummaryToJson(w.gpuMs);
 		jw["simTimeMs"] = SummaryToJson(w.simMs);
 		jw["simFrames"] = w.simFrames;
+		jw["memoryMB"]["start"] = w.memStartMB;
+		jw["memoryMB"]["peak"] = w.memPeakMB;
+		jw["memoryMB"]["end"] = w.memEndMB;
+		jw["memoryMB"]["growth"] = w.memEndMB - w.memStartMB;
 		root["windows"].append(jw);
 	}
 

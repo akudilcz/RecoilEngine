@@ -9,6 +9,7 @@
 #include "Game/GlobalUnsynced.h"
 #endif
 
+#include <algorithm>
 #include <filesystem>
 
 CWorkbench workbench;
@@ -131,6 +132,18 @@ void CWorkbench::OnSimFrame(int frameNum, float simMs, unsigned checksum, bool c
 		w->simMs.push_back(simMs);
 		w->simFrames += 1;
 	}
+}
+
+void CWorkbench::OnMemorySample(size_t residentBytes)
+{
+	WorkbenchWindow* w = CurrentWindow();
+	if (w == nullptr || residentBytes == 0)
+		return;
+	const double mb = residentBytes / (1024.0 * 1024.0);
+	if (w->memStartMB == 0.0)
+		w->memStartMB = mb;
+	w->memPeakMB = std::max(w->memPeakMB, mb);
+	w->memEndMB = mb;
 }
 
 void CWorkbench::Update(float nowSec)
