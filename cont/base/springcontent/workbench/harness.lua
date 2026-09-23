@@ -99,7 +99,10 @@ end
 
 -- ---------------------------------------------------------------- unsynced side
 local queue, current, co, startedAt = {}, nil, nil, nil
-local frames, nextCallId = 0, 0
+local frames = 0
+-- call ids are unique per LuaUI instance: a reloaded LuaUI must never read the reply to a
+-- previous instance's call (the reply params live in synced state and are not cleared)
+local nextCallId = math.floor(Spring.GetGameFrame() * 1000 + (os.clock() * 1000) % 1000)
 local gameFrameQueue = {}
 
 local function send(callId, sc, fnName, ...)
