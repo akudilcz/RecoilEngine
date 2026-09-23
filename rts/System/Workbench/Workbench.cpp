@@ -145,8 +145,10 @@ void CWorkbench::OnDrawFrame(float frameMs, float drawMs, float gpuMs)
 	if (WorkbenchWindow* w = CurrentWindow(); w != nullptr) {
 		w->frameMs.push_back(frameMs);
 		w->drawMs.push_back(drawMs);
-		if (gpuMs > 0.0f)
+		// an unfinished timer query returns the previous value again: count each result once
+		if (gpuMs > 0.0f && gpuMs != lastGpuMs)
 			w->gpuMs.push_back(gpuMs);
+		lastGpuMs = gpuMs;
 	}
 }
 

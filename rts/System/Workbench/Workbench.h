@@ -65,6 +65,7 @@ private:
 	int exitCode = 0;
 	int timeoutSec = 0;
 	int frameStallMs = 0;
+	float lastGpuMs = -1.0f;
 	float startSec = -1.0f; // set on the first Update: the clock source changes after Configure
 	int lastSimFrame = -1;
 	unsigned lastChecksum = 0;

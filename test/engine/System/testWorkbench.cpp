@@ -310,3 +310,18 @@ TEST_CASE("Forced draws of a minimised window are not recorded as frames")
 	wb.EndWindow();
 	CHECK(wb.GetScenarios()[0].windows[0].frameMs.size() == 1);
 }
+
+TEST_CASE("Repeated GPU timings (query not ready yet) are not double counted")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("s");
+	wb.BeginWindow("w");
+	wb.OnDrawFrame(16.0f, 5.0f, 4.0f);
+	wb.OnDrawFrame(16.0f, 5.0f, 4.0f); // CalcGLDeltaTime returned the cached previous value
+	wb.OnDrawFrame(16.0f, 5.0f, 4.5f);
+	wb.EndWindow();
+	CHECK(wb.GetScenarios()[0].windows[0].gpuMs.size() == 2);
+	CHECK(wb.GetScenarios()[0].windows[0].frameMs.size() == 3);
+}
