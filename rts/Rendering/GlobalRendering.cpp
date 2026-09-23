@@ -722,7 +722,13 @@ void CGlobalRendering::SetGLTimeStamp(uint32_t queryIdx) const
 	if (!GLAD_GL_ARB_timer_query)
 		return;
 
-	glQueryCounter(glTimerQueries[(NUM_OPENGL_TIMER_QUERIES * (drawFrame & 1)) + queryIdx], GL_TIMESTAMP);
+	const uint32_t set = drawFrame % NUM_OPENGL_TIMER_QUERY_SETS;
+
+	if (queryIdx == FRAME_REF_TIME_QUERY_IDX)
+		glTimerQueriesIssued[set] = 0;
+
+	glQueryCounter(glTimerQueries[(NUM_OPENGL_TIMER_QUERIES * set) + queryIdx], GL_TIMESTAMP);
+	glTimerQueriesIssued[set] |= (1u << queryIdx);
 }
 
 uint64_t CGlobalRendering::CalcGLDeltaTime(uint32_t queryIdx0, uint32_t queryIdx1) const
@@ -730,7 +736,10 @@ uint64_t CGlobalRendering::CalcGLDeltaTime(uint32_t queryIdx0, uint32_t queryIdx
 	if (!GLAD_GL_ARB_timer_query)
 		return 0;
 
-	const uint32_t queryBase = NUM_OPENGL_TIMER_QUERIES * (1 - (drawFrame & 1));
+	// the oldest set in the ring: written NUM_OPENGL_TIMER_QUERY_SETS - 1 frames ago
+	const uint32_t set = (drawFrame + 1) % NUM_OPENGL_TIMER_QUERY_SETS;
+	const uint32_t queryBase = NUM_OPENGL_TIMER_QUERIES * set;
+	const uint32_t needed = (1u << queryIdx0) | (1u << queryIdx1);
 
 	assert(queryIdx0 < NUM_OPENGL_TIMER_QUERIES);
 	assert(queryIdx1 < NUM_OPENGL_TIMER_QUERIES);
@@ -741,9 +750,11 @@ uint64_t CGlobalRendering::CalcGLDeltaTime(uint32_t queryIdx0, uint32_t queryIdx
 
 	GLint res = 0;
 
-	// results from the previous frame should already (or soon) be available;
-	// avoid stalling the CPU on the GPU query and just reuse the last known
-	// delta if it is not ready yet, we will pick up the fresh value next call
+	if ((glTimerQueriesIssued[set] & needed) != needed)
+		return lastGLDeltaTime;
+
+	// results from a few frames ago should be available by now; never stall the
+	// CPU on the GPU: reuse the last known delta and pick up a fresh one next call
 	glGetQueryObjectiv(glTimerQueries[queryBase + queryIdx1], GL_QUERY_RESULT_AVAILABLE, &res);
 
 	if (!res)

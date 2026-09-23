@@ -17,7 +17,7 @@ Generated from the game's defs, so new units are covered without writing tests. 
 | `unit_behaviours` | every land factory produces, every mobile builder builds; transport, cloak, radar | 94 | 94 |
 | `ui_lowfps` | box select and shift-drag build with the whole gesture inside one ~8 fps frame | 2 | 2 |
 
-Getting there took four test-design fixes, each found by the workbench's own diagnostics: map terrain, leftover projectiles between batches, the range model (dummy weapons, underwater-only lasers, stockpiles, splash) a cloak widget holding fire, and weapons that need energy.
+Getting there took four test-design fixes, each found by the workbench's own diagnostics: map terrain, leftover projectiles between batches, the range model (dummy weapons, underwater-only lasers, stockpiles, splash), a cloak widget holding fire, and weapons that need energy.
 
 ## 2026-09-24: determinism (`sync_repro`, seed 1234, spectate, 3000-frame seeded battle)
 
