@@ -119,5 +119,23 @@ class Suites(unittest.TestCase):
             run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "nope"])
 
 
+class CollectInfolog(unittest.TestCase):
+    def test_stale_infolog_from_a_previous_run_is_not_attributed(self):
+        with tempfile.TemporaryDirectory() as data, tempfile.TemporaryDirectory() as cell:
+            log = os.path.join(data, "infolog.txt")
+            with open(log, "w") as f:
+                f.write("old run")
+            os.utime(log, (1000, 1000))
+            self.assertFalse(run.collect_infolog(data, cell, started=2000))
+            self.assertFalse(os.path.exists(os.path.join(cell, "infolog.txt")))
+
+    def test_fresh_infolog_is_copied(self):
+        with tempfile.TemporaryDirectory() as data, tempfile.TemporaryDirectory() as cell:
+            with open(os.path.join(data, "infolog.txt"), "w") as f:
+                f.write("this run")
+            self.assertTrue(run.collect_infolog(data, cell, started=0))
+            self.assertTrue(os.path.exists(os.path.join(cell, "infolog.txt")))
+
+
 if __name__ == "__main__":
     unittest.main()

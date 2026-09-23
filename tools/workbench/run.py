@@ -99,6 +99,15 @@ def scan_infolog(lines):
     return issues
 
 
+def collect_infolog(data_dir, cell_dir, started):
+    """Copies this run's infolog into the cell; a log older than the launch belongs to a previous run."""
+    infolog = os.path.join(data_dir, "infolog.txt")
+    if not os.path.exists(infolog) or os.path.getmtime(infolog) < started:
+        return False
+    shutil.copy(infolog, os.path.join(cell_dir, "infolog.txt"))
+    return True
+
+
 def run_cell(cell, args, out_root):
     cell_dir, cmd = prepare_cell(cell, args, out_root)
     started = datetime.datetime.now().timestamp()
@@ -108,9 +117,8 @@ def run_cell(cell, args, out_root):
     except subprocess.TimeoutExpired:
         timed_out = True
 
-    infolog = os.path.join(args.data_dir, "infolog.txt")
-    if os.path.exists(infolog):
-        shutil.copy(infolog, os.path.join(cell_dir, "infolog.txt"))
+    fresh_log = collect_infolog(args.data_dir, cell_dir, started)
+    infolog = os.path.join(cell_dir, "infolog.txt") if fresh_log else ""
     # per-frame sync checksums written by the sync_repro scenario (BAR dbg_synctest)
     synchash = os.path.join(args.data_dir, "synctest_synchash.json")
     if os.path.exists(synchash) and os.path.getmtime(synchash) >= started:
