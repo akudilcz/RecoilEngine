@@ -31,6 +31,8 @@ public:
 	void FinishRun();
 	// engine is exiting: a run that never reached FinishRun (game over, crash-free quit) is an error
 	void OnShutdown();
+	// fatal error / crash: record it against the running scenario and write results
+	void OnCrash(const std::string& msg);
 
 	void OnDrawFrame(float frameMs, float drawMs, float gpuMs);
 	void OnSimFrame(int frameNum, float simMs, unsigned checksum, bool checksumValid);

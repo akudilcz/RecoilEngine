@@ -18,6 +18,7 @@
 
 #if !defined(DEDICATED)
 	#include "System/SpringApp.h"
+	#include "System/Workbench/Workbench.h"
 	#include "System/Platform/Threading.h"
 #endif
 #if !defined(DEDICATED) && !defined(HEADLESS)
@@ -84,8 +85,17 @@ static void ExitSpringProcess(const char* msg, const char* caption, unsigned int
 
 void ErrorMessageBox(const char* msg, const char* caption, unsigned int flags)
 {
+	// unattended workbench runs: record the failure and never block on a dialog
+	#if !defined(DEDICATED)
+	const bool workbenchRun = workbench.IsActive();
+	if (workbenchRun)
+		workbench.OnCrash(std::string(caption) + ": " + msg);
+	#else
+	constexpr bool workbenchRun = false;
+	#endif
+
 	#if (!defined(DEDICATED) && !defined(HEADLESS))
-	if (Threading::IsMainThread()) {
+	if (Threading::IsMainThread() && !workbenchRun) {
 		// the thread that throws up this message-box will be blocked
 		// until it is clicked away which can cause spurious detected
 		// hangs, so deregister it here (by forwarding an empty error)

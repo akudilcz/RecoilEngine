@@ -8,13 +8,15 @@
 --     name = "unique_name",           -- matched against the --workbench pattern (comma-separated globs)
 --     timeout = 120,                  -- seconds, optional (default 300)
 --     run = function(ctx) ... end,    -- runs as a coroutine in LuaUI
---     synced = { fn = function(...) end }, -- optional; call with ctx.synced("fn", ...) (numbers/strings only)
---   }
+--     synced = { fn = function(...) end }, -- optional; ctx.synced("fn", ...) fires and forgets,
+--                                          -- ctx.call("fn", ...) waits and returns value or nil, err
+--   }                                      -- (args and return values: numbers/strings only)
 
 local H = {}
 local MSG_PREFIX = "workbench:"
 local SCENARIO_DIR = "workbench/scenarios/"
 local DEFAULT_TIMEOUT = 300
+local REPLY_PARAM = "workbench_reply_"
 
 local function globToPattern(glob)
 	local p = glob:gsub("[%^%$%(%)%%%.%[%]%+%-]", "%%%0"):gsub("%*", ".*"):gsub("%?", ".")
@@ -68,26 +70,42 @@ function H.RecvSynced(msg)
 	for field in (msg:sub(#MSG_PREFIX + 1) .. "|"):gmatch("([^|]*)|") do
 		parts[#parts + 1] = field
 	end
-	local fn = syncedFns[parts[1]]
+	-- layout: <callId>|<scenario.fn>|<args...>; callId is empty for fire-and-forget calls
+	local callId, fnKey = parts[1], parts[2]
+	local fn = syncedFns[fnKey]
+	local reply
 	if fn then
 		local args = {}
-		for i = 2, #parts do
+		for i = 3, #parts do
 			local v = parts[i]
 			args[#args + 1] = tonumber(v) or v
 		end
-		local ok, err = pcall(fn, unpack(args))
-		if not ok then
-			Spring.Log("Workbench", LOG.ERROR, "synced " .. parts[1] .. ": " .. tostring(err))
+		local ok, ret = pcall(fn, unpack(args))
+		if ok then
+			reply = ret
+		else
+			Spring.Log("Workbench", LOG.ERROR, "synced " .. fnKey .. ": " .. tostring(ret))
+			reply = "error: " .. tostring(ret)
 		end
 	else
-		Spring.Log("Workbench", LOG.ERROR, "unknown synced function " .. tostring(parts[1]))
+		Spring.Log("Workbench", LOG.ERROR, "unknown synced function " .. tostring(fnKey))
+		reply = "error: unknown synced function " .. tostring(fnKey)
+	end
+	if callId ~= "" then
+		Spring.SetGameRulesParam(REPLY_PARAM .. callId, reply == nil and "" or reply)
 	end
 	return true
 end
 
 -- ---------------------------------------------------------------- unsynced side
 local queue, current, co, startedAt = {}, nil, nil, nil
-local frames = 0
+local frames, nextCallId = 0, 0
+
+local function send(callId, sc, fnName, ...)
+	local parts = { MSG_PREFIX .. callId, sc.name .. "." .. fnName }
+	for _, v in ipairs({ ... }) do parts[#parts + 1] = tostring(v) end
+	Spring.SendLuaRulesMsg(table.concat(parts, "|"))
+end
 
 local function makeCtx(sc)
 	local ctx = {}
@@ -120,9 +138,24 @@ local function makeCtx(sc)
 		Spring.Workbench.Check(name, pass and true or false, detail and tostring(detail) or "")
 	end
 	function ctx.synced(fnName, ...)
-		local parts = { MSG_PREFIX .. sc.name .. "." .. fnName }
-		for _, v in ipairs({ ... }) do parts[#parts + 1] = tostring(v) end
-		Spring.SendLuaRulesMsg(table.concat(parts, "|"))
+		send("", sc, fnName, ...)
+	end
+	-- runs a synced function and returns its result (number or string), or nil plus an
+	-- error message. It does not raise: Lua 5.1 cannot yield inside pcall, so callers
+	-- could not catch an error from a call that waits for its reply.
+	function ctx.call(fnName, ...)
+		nextCallId = nextCallId + 1
+		local key = REPLY_PARAM .. nextCallId
+		send(tostring(nextCallId), sc, fnName, ...)
+		local replied = ctx.waitUntil(function() return Spring.GetGameRulesParam(key) ~= nil end, 10)
+		if not replied then
+			return nil, "no reply from synced " .. fnName
+		end
+		local v = Spring.GetGameRulesParam(key)
+		if type(v) == "string" and v:sub(1, 7) == "error: " then
+			return nil, "synced " .. fnName .. " failed: " .. v:sub(8)
+		end
+		return v
 	end
 	function ctx.log(msg)
 		Spring.Echo("[Workbench] " .. sc.name .. ": " .. tostring(msg))

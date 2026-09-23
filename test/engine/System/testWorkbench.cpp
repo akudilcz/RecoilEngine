@@ -155,3 +155,15 @@ TEST_CASE("OnShutdown after FinishRun keeps the result")
 	wb.OnShutdown();
 	CHECK(wb.GetExitCode() == 0);
 }
+
+TEST_CASE("A crash during a scenario is recorded against that scenario")
+{
+	CWorkbench wb;
+	wb.writeFiles = false;
+	wb.Configure("x", "", 60, "default");
+	wb.BeginScenario("weapon_range");
+	wb.OnCrash("Access violation (0xc0000005)");
+	CHECK(wb.IsFinished());
+	CHECK(wb.GetExitCode() == 2);
+	CHECK(wb.GetScenarios()[0].error == "engine crashed: Access violation (0xc0000005)");
+}

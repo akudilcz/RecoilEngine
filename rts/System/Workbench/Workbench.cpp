@@ -162,6 +162,15 @@ void CWorkbench::OnShutdown()
 	FinishRun();
 }
 
+void CWorkbench::OnCrash(const std::string& msg)
+{
+	if (!active || finished)
+		return;
+	SetScenarioError("engine crashed: " + msg);
+	SetRunError("engine crashed: " + msg);
+	FinishRun();
+}
+
 void CWorkbench::FinishRun()
 {
 	if (finished)
