@@ -23,16 +23,17 @@ void CWorkbench::Configure(const std::string& pattern, const std::string& dir, i
 	info.profile = profile;
 	outDir = dir;
 	timeoutSec = timeout;
-	if (!nowFunc)
-		nowFunc = []() { return spring_gettime().toSecsf(); };
-	startSec = nowFunc();
-
-	if (active && writeFiles && !outDir.empty()) {
-		std::error_code ec;
-		std::filesystem::create_directories(outDir, ec);
-	}
+	startSec = -1.0f;
 	if (active)
 		LOG("[Workbench] active: pattern=\"%s\" out=\"%s\" timeout=%ds", pattern.c_str(), outDir.c_str(), timeout);
+}
+
+void CWorkbench::ValidateGame(size_t numHumanPlayers)
+{
+	if (!active || numHumanPlayers <= 1)
+		return;
+	LOG_L(L_WARNING, "[Workbench] disabled: %zu human players in this game, the workbench only runs in single-human games", numHumanPlayers);
+	active = false;
 }
 
 void CWorkbench::SetEngineInfo(const std::string& engineVersion, const std::string& gameName)
@@ -109,6 +110,8 @@ void CWorkbench::SetScenarioError(const std::string& msg)
 
 void CWorkbench::SetRunError(const std::string& msg)
 {
+	if (!active)
+		return;
 	runError = msg;
 	LOG_L(L_ERROR, "[Workbench] run error: %s", msg.c_str());
 }
@@ -150,6 +153,10 @@ void CWorkbench::Update(float nowSec)
 {
 	if (!active || finished || timeoutSec <= 0)
 		return;
+	if (startSec < 0.0f) {
+		startSec = nowSec;
+		return;
+	}
 	if ((nowSec - startSec) <= float(timeoutSec))
 		return;
 	SetScenarioError("watchdog timeout");
@@ -195,7 +202,7 @@ void CWorkbench::OnHang(const std::string& threadName)
 
 void CWorkbench::FinishRun()
 {
-	if (finished)
+	if (!active || finished)
 		return;
 	if (inScenario)
 		EndScenario();

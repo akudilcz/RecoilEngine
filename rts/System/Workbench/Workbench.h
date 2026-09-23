@@ -13,6 +13,9 @@
 class CWorkbench {
 public:
 	void Configure(const std::string& pattern, const std::string& outDir, int timeoutSec, const std::string& profile);
+	// only single-human games may run the workbench: the opt-in gadget and its synced
+	// replies exist only on the client started with --workbench, so others would desync
+	void ValidateGame(size_t numHumanPlayers);
 	bool IsActive() const { return active; }
 	bool IsFinished() const { return finished; }
 	int GetExitCode() const { return exitCode; }
@@ -26,7 +29,7 @@ public:
 	void AddCheck(const std::string& name, bool pass, const std::string& detail);
 	void SetScenarioError(const std::string& msg);
 	void SetRunError(const std::string& msg);
-	void SetFrameStall(int ms) { frameStallMs = ms; }
+	void SetFrameStall(int ms) { if (active) frameStallMs = ms; }
 	int GetFrameStall() const { return frameStallMs; }
 	void FinishRun();
 	// engine is exiting: a run that never reached FinishRun (game over, crash-free quit) is an error
@@ -58,7 +61,7 @@ private:
 	int exitCode = 0;
 	int timeoutSec = 0;
 	int frameStallMs = 0;
-	float startSec = 0.0f;
+	float startSec = -1.0f; // set on the first Update: the clock source changes after Configure
 	int lastSimFrame = -1;
 	unsigned lastChecksum = 0;
 	bool syncAvailable = false;

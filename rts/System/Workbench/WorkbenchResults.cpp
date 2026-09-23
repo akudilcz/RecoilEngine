@@ -4,6 +4,7 @@
 #include "WorkbenchStats.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 
@@ -86,6 +87,12 @@ Json::Value RunToJson(const std::vector<std::string>& scenarioNames, int exitCod
 
 bool WriteJsonFile(const std::string& path, const Json::Value& value)
 {
+	// create missing directories at write time: the default output dir is relative and
+	// only meaningful after the engine has changed into its write dir
+	std::error_code ec;
+	if (const auto parent = std::filesystem::path(path).parent_path(); !parent.empty())
+		std::filesystem::create_directories(parent, ec);
+
 	Json::StreamWriterBuilder builder;
 	builder["indentation"] = "  ";
 	std::ofstream out(path, std::ios::binary | std::ios::trunc);
