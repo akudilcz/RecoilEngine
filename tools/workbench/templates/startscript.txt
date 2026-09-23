@@ -10,6 +10,7 @@
 	StartPosType=3;
 	[MODOPTIONS]
 	{
+		maxunits=10000;
 	}
 	[PLAYER0]
 	{
