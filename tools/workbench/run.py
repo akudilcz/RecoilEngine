@@ -13,6 +13,13 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 Cell = collections.namedtuple("Cell", "engine exe profile rep")
 
+# named scenario sets; --only overrides
+SUITES = {
+    "smoke": "api_selftest,render_baseline,mass_move_500,weapon_range",   # ~10 min
+    "standard": "api_selftest,render_baseline,mass_move_*,weapon_range,unit_movement",
+    "determinism": "sync_repro",  # use with --spectate --seed N
+}
+
 
 def expand_matrix(engines, profiles, reps):
     return [Cell(name, exe, prof, rep) for name, exe in engines.items() for prof in profiles for rep in range(reps)]
@@ -124,7 +131,8 @@ def parse_args(argv):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--engine", action="append", required=True, help="NAME=PATH to spring.exe (repeatable)")
     p.add_argument("--data-dir", required=True, help="write/data dir with games/BAR.sdd and maps/")
-    p.add_argument("--only", default="*", help="scenario name pattern(s), comma separated globs")
+    p.add_argument("--only", default=None, help="scenario name pattern(s), comma separated globs")
+    p.add_argument("--suite", default=None, help="named scenario set: " + ", ".join(SUITES))
     p.add_argument("--profile", action="append", default=None, help="settings profile name (repeatable)")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--timeout", type=int, default=1800)
@@ -135,6 +143,10 @@ def parse_args(argv):
     p.add_argument("--out", default=os.path.join(HERE, "results"))
     p.add_argument("--no-report", action="store_true")
     args = p.parse_args(argv)
+    if args.suite is not None and args.suite not in SUITES:
+        p.error(f"unknown suite '{args.suite}' (known: {', '.join(SUITES)})")
+    if args.only is None:
+        args.only = SUITES[args.suite] if args.suite else SUITES["smoke"]
     args.profile = args.profile or ["default"]
     for prof in args.profile:
         if not os.path.exists(os.path.join(HERE, "profiles", prof + ".cfg")):

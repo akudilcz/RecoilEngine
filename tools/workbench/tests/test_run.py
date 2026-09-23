@@ -103,5 +103,21 @@ class Spectate(unittest.TestCase):
                 self.assertIn("Spectator=0;", f.read())
 
 
+class Suites(unittest.TestCase):
+    def test_suite_expands_to_its_scenarios(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "smoke"])
+            self.assertEqual(args.only, run.SUITES["smoke"])
+
+    def test_only_overrides_suite(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "smoke", "--only", "x"])
+            self.assertEqual(args.only, "x")
+
+    def test_unknown_suite_is_an_error(self):
+        with tempfile.TemporaryDirectory() as out, self.assertRaises(SystemExit):
+            run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--suite", "nope"])
+
+
 if __name__ == "__main__":
     unittest.main()

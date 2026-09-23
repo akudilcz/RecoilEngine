@@ -15,10 +15,12 @@ Design: [`doc/superpowers/specs/2026-09-23-workbench-design.md`](../../doc/super
 wsl -d Ubuntu -- bash /mnt/c/Workspace/bar/RecoilEngine/tools/workbench/wsl-build.sh
 wsl -d Ubuntu -- bash /mnt/c/Workspace/bar/RecoilEngine/tools/workbench/deploy.sh /mnt/c/Workspace/bar/engine-dev
 
-# 2. run scenarios and open the report
-python tools/workbench/run.py --engine dev=C:/Workspace/bar/engine-dev/spring.exe \
-    --data-dir C:/Workspace/bar/data --only "api_selftest,render_baseline,mass_move_500,weapon_range"
+# 2. run the smoke suite (~10 min) and open the report
+python tools/workbench/run.py --suite smoke --engine dev=C:/Workspace/bar/engine-dev/spring.exe \
+    --data-dir C:/Workspace/bar/data
 ```
+
+Suites: `smoke` (the default), `standard` (adds every mobile unit's movement checks) and `determinism` (`sync_repro`; use with `--spectate --seed N`). `--only <globs>` runs any scenarios by name instead.
 
 Compare two builds (the first engine is the baseline):
 
