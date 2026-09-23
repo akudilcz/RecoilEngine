@@ -105,6 +105,7 @@
 #include "Game/UnsyncedGameCommands.h"
 #include "Game/SyncedGameCommands.h"
 #include "lib/luasocket/src/restrictions.h"
+#include "System/Workbench/Workbench.h"
 
 
 
@@ -160,6 +161,10 @@ DEFINE_string_EX(calc_checksum,      "calc-checksum",      "",    "Calculate nam
  * So normally if two games were originally played on the same port number, you can't watch their replays in
  * parallel because they both try to open the same port. This makes automated replay parsing difficult when
  * the same port number is heavily reused across many replays. Forcing onlyLocal solves this. */
+DEFINE_string   (workbench,                                "",    "Run Recoil Workbench scenarios matching this pattern (comma-separated globs), then quit");
+DEFINE_string_EX(workbench_out,      "workbench-out",      "",    "Workbench results directory (default <write-dir>/workbench)");
+DEFINE_int32    (workbench_timeout,                        1800,  "Workbench watchdog in seconds for the whole run");
+DEFINE_string_EX(workbench_profile,  "workbench-profile",  "default", "Settings profile name recorded in workbench results");
 DEFINE_bool_EX  (onlyLocal,              "only-local",     false, "Force OnlyLocal mode (no network listening sockets). Use for parallelized watching of multiplayer replays");
 
 
@@ -492,6 +497,13 @@ void SpringApp::ParseCmdLine(int argc, char* argv[])
 
 	if (!FLAGS_write_dir.empty())
 		dataDirLocater.SetWriteDir(FLAGS_write_dir);
+
+	if (!FLAGS_workbench.empty()) {
+		std::string out = FLAGS_workbench_out;
+		if (out.empty())
+			out = (FLAGS_write_dir.empty() ? std::string(".") : FLAGS_write_dir) + "/workbench";
+		workbench.Configure(FLAGS_workbench, out, FLAGS_workbench_timeout, FLAGS_workbench_profile);
+	}
 
 	if (FLAGS_gen_fontconfig) {
 		{
