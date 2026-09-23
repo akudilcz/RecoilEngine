@@ -4,6 +4,21 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-09-24: game logic coverage (dev, flat arena)
+
+Generated from the game's defs, so new units are covered without writing tests. Every failure names what happened (which unit and weapon hit, which weapons fired, how far short a unit stopped).
+
+| Scenario | What each case checks | Cases | Pass |
+|---|---|---|---|
+| `unit_movement` | every mobile ground unit type arrives within budget, never over maxSpeed +10% | 346 (173 types) | 346 |
+| `ship_movement` | the same for every ship and submarine, on a flooded arena | 104 (52 types) | 104 |
+| `weapon_range_all` | every armed ground unit hits a structure inside its must-hit range and nothing it fires reaches past its reach | 238 (119 types; 18 without a weapon that can hurt a structure skipped) | 237 in the full run; the one failure (`corsiegebreaker`, 1500 energy per shot on an arena with no energy) passes after the fix (`--filter corsiegebreaker`) |
+| `air_attack` | every armed aircraft that can hurt a structure strikes one 1500 elmos away | 18 | 18 (first hits after 5.0 s for drones to 13.1 s for `armpnix`) |
+| `unit_behaviours` | every land factory produces, every mobile builder builds; transport, cloak, radar | 94 | 94 |
+| `ui_lowfps` | box select and shift-drag build with the whole gesture inside one ~8 fps frame | 2 | 2 |
+
+Getting there took four test-design fixes, each found by the workbench's own diagnostics: map terrain, leftover projectiles between batches, the range model (dummy weapons, underwater-only lasers, stockpiles, splash) a cloak widget holding fire, and weapons that need energy.
+
 ## 2026-09-24: determinism (`sync_repro`, seed 1234, spectate, 3000-frame seeded battle)
 
 | Comparison | Result |

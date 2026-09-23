@@ -20,7 +20,7 @@ python tools/workbench/run.py --suite smoke --engine dev=C:/Workspace/bar/engine
     --data-dir C:/Workspace/bar/data
 ```
 
-Suites: `smoke` (the default), `standard` (adds big battles, every ground unit's and ship's movement, every factory's and builder's production and every armed aircraft's strike), `full` (adds every armed unit's weapon range; hours), `determinism` (`sync_repro`; use with `--spectate --seed N`) and `render` (graphics cost across the `low`, `default` and `ultra` settings profiles; the report adds a settings-sweep table). `--only <globs>` runs any scenarios by name instead; `--profile` picks profiles explicitly.
+Suites: `smoke` (the default), `standard` (adds big battles, every ground unit's and ship's movement, every factory's and builder's production and every armed aircraft's strike), `full` (adds every armed unit's weapon range; hours), `determinism` (`sync_repro`; use with `--spectate --seed N`) and `render` (graphics cost across the `low`, `default` and `ultra` settings profiles; the report adds a settings-sweep table). `--only <globs>` runs any scenarios by name instead; `--profile` picks profiles explicitly; `--filter <globs>` focuses generated scenarios on some cases, e.g. `--only weapon_range_all --filter corsiegebreaker` (scenarios ask `ctx.wants(caseName)`).
 
 Compare two builds (the first engine is the baseline):
 
