@@ -410,13 +410,22 @@ public:
 	static constexpr uint32_t NUM_OPENGL_TIMER_QUERIES = 8;
 	static constexpr uint32_t FRAME_REF_TIME_QUERY_IDX = 0;
 	static constexpr uint32_t FRAME_END_TIME_QUERY_IDX = NUM_OPENGL_TIMER_QUERIES - 1;
+	// frames of timer queries in flight; the GPU commonly runs 2-3 frames behind the
+	// CPU, so results are read from the oldest set
+	static constexpr uint32_t NUM_OPENGL_TIMER_QUERY_SETS = 4;
 private:
 	void SetMinSampleShadingRate();
 	bool SetWindowMinMaximized(bool maximize) const;
 private:
 	spring::unordered_set<std::string> glExtensions;
-	// double-buffered; results from frame N become available on frame N+1
-	std::array<uint32_t, NUM_OPENGL_TIMER_QUERIES * 2> glTimerQueries;
+	// ring of NUM_OPENGL_TIMER_QUERY_SETS sets; frame N writes set N % SETS and reads
+	// the set written SETS - 1 frames earlier. (A double buffer is too shallow: with the
+	// GPU two frames behind, a set was reissued before its result became available, so
+	// the delta was never refreshed.)
+	std::array<uint32_t, NUM_OPENGL_TIMER_QUERIES * NUM_OPENGL_TIMER_QUERY_SETS> glTimerQueries;
+	// per set, a bit per query index issued since the set's FRAME_REF query; a query
+	// name that was never issued is not a query object and must not be read
+	mutable std::array<uint32_t, NUM_OPENGL_TIMER_QUERY_SETS> glTimerQueriesIssued = {};
 	// last successfully retrieved GL timer-query delta (nanoseconds); returned
 	// by CalcGLDeltaTime when the current query result is not available yet,
 	// so callers never block waiting on the GPU
