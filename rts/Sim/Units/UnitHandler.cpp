@@ -22,6 +22,7 @@
 #include "Sim/MoveTypes/Systems/UnitTrapCheckSystem.h"
 #include "Sim/Path/IPathManager.h"
 #include "Sim/Weapons/Weapon.h"
+#include "System/ContainerUtil.h"
 #include "System/EventHandler.h"
 #include "System/Log/ILog.h"
 #include "System/SpringMath.h"
@@ -239,13 +240,26 @@ bool CUnitHandler::GarbageCollectUnit(unsigned int id)
 	if (inUpdateCall)
 		return false;
 
-	assert(unitsToBeRemoved.empty());
+	CUnit* unit = units[id];
 
-	if (!QueueDeleteUnit(units[id]))
+	if (unit == nullptr)
+		return false;
+	if (!QueueDeleteUnit(unit))
 		return false;
 
-	// only processes units[id]
+	// the queue can still hold units killed on a previous frame; process only
+	// this one now (via DeleteUnits, which also unlinks it from activeUnits)
+	// and leave the others queued for the next Update
+	static std::vector<CUnit*> pendingUnits;
+	pendingUnits.clear();
+	pendingUnits.swap(unitsToBeRemoved);
+	spring::VectorEraseAll(pendingUnits, unit);
+	unitsToBeRemoved.push_back(unit);
+
 	DeleteUnits();
+
+	assert(unitsToBeRemoved.empty());
+	unitsToBeRemoved.swap(pendingUnits);
 
 	return (idPool.RecycleID(id));
 }
