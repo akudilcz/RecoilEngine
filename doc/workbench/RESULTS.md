@@ -19,6 +19,16 @@ Generated from the game's defs, so new units are covered without writing tests. 
 
 Getting there took four test-design fixes, each found by the workbench's own diagnostics: map terrain, leftover projectiles between batches, the range model (dummy weapons, underwater-only lasers, stockpiles, splash), a cloak widget holding fire, and weapons that need energy.
 
+## 2026-09-24: settings sweep (`--suite render`, dev, 1 rep, median of per-window p50)
+
+| Profile | render_baseline frame | GPU | mass_move_500 frame | GPU |
+|---|---|---|---|---|
+| low (no shadows, MSAA off, basic water) | 9.7 ms | 9.0 ms | 10.3 ms | 10.7 ms |
+| default | 13.6 ms | 12.2 ms | 14.8 ms | 13.8 ms |
+| ultra (shadow quality 6, MSAA 8, 40k particles) | 40.4 ms | 37.4 ms | 41.4 ms | 38.9 ms |
+
+Ultra costs about 3x default and is GPU-bound at every profile (GPU ≈ frame time). The first run of this sweep exposed that GPU time was not being measured at high frame rates (see findings); these numbers are from the fixed engine.
+
 ## 2026-09-24: determinism (`sync_repro`, seed 1234, spectate, 3000-frame seeded battle)
 
 | Comparison | Result |
