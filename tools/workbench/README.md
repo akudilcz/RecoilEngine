@@ -112,7 +112,7 @@ A game opts in with a widget and a gadget that `VFS.Include("workbench/harness.l
 
 CI (`.github/workflows/workbench.yml`) runs on every change to the workbench: runner and report tests, a Lua 5.1 parse of the harness and engine scenarios, and the C++ unit tests (`test_Workbench`, `test_KeyInput`) in the official build image. BAR's own luacheck CI covers the game's scenarios.
 
-`--jobs N` runs a cell's scenarios in N engine instances with private write dirs and merges the results. Measure before relying on it: on a 16-thread desktop 3 jobs were slower than 1, because each instance's sim already uses every core.
+`--jobs N` runs a cell's scenarios in N engine instances with private write dirs and merges the results. Measure before relying on it: on a 14-thread desktop 3 jobs were slower than 1 (315 s against 219 s), because each instance's sim already uses every core.
 
 ```bash
 python -m unittest discover -s tools/workbench/tests          # runner + report

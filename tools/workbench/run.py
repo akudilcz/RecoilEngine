@@ -257,7 +257,7 @@ def parse_args(argv):
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--jobs", type=int, default=1,
                    help="engine instances per cell, each running a share of the scenarios (logic suites; "
-                        "timings from parallel instances are not comparable; on an 8-16 thread machine the sim's own "
+                        "timings from parallel instances are not comparable; on a 14-thread machine the sim's own "
                         "thread pool already saturates the CPU and 3 jobs were slower than 1: measure first)")
     p.add_argument("--timeout", type=int, default=1800)
     p.add_argument("--map", default="Red Comet Remake 1.8")
