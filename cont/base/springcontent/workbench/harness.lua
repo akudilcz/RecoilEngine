@@ -101,8 +101,10 @@ end
 local queue, current, co, startedAt = {}, nil, nil, nil
 local frames = 0
 -- call ids are unique per LuaUI instance: a reloaded LuaUI must never read the reply to a
--- previous instance's call (the reply params live in synced state and are not cleared)
-local nextCallId = math.floor(Spring.GetGameFrame() * 1000 + (os.clock() * 1000) % 1000)
+-- previous instance's call (the reply params live in synced state and are not cleared).
+-- Seeded from the load frame on first use; this file is also loaded by synced code,
+-- where os does not exist, so nothing here may run at load time beyond plain values.
+local nextCallId
 local gameFrameQueue = {}
 
 local function send(callId, sc, fnName, ...)
@@ -148,7 +150,7 @@ local function makeCtx(sc)
 	-- error message. It does not raise: Lua 5.1 cannot yield inside pcall, so callers
 	-- could not catch an error from a call that waits for its reply.
 	function ctx.call(fnName, ...)
-		nextCallId = nextCallId + 1
+		nextCallId = (nextCallId or Spring.GetGameFrame() * 100000) + 1
 		local key = REPLY_PARAM .. nextCallId
 		send(tostring(nextCallId), sc, fnName, ...)
 		local replied = ctx.waitUntil(function() return Spring.GetGameRulesParam(key) ~= nil end, 10)
