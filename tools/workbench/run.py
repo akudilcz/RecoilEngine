@@ -35,7 +35,8 @@ def tail_lines(path, n):
         return []
 
 
-def run_cell(cell, args, out_root):
+def prepare_cell(cell, args, out_root):
+    """Writes the cell's start script and config, returns (cell_dir, command)."""
     cell_dir = os.path.join(out_root, cell.engine, cell.profile, f"rep{cell.rep}")
     os.makedirs(cell_dir, exist_ok=True)
     with open(os.path.join(HERE, "templates", "startscript.txt"), encoding="utf-8") as f:
@@ -43,11 +44,14 @@ def run_cell(cell, args, out_root):
     script_path = os.path.join(cell_dir, "startscript.txt")
     with open(script_path, "w", encoding="utf-8") as f:
         f.write(script)
+    # the engine writes settings back into its --config file, so give each cell its own copy
+    config_path = os.path.join(cell_dir, "springsettings.cfg")
+    shutil.copyfile(os.path.join(HERE, "profiles", cell.profile + ".cfg"), config_path)
 
     cmd = [
         cell.exe,
         "--isolation", "--write-dir", args.data_dir,
-        "--config", os.path.join(HERE, "profiles", cell.profile + ".cfg"),
+        "--config", config_path,
         "--workbench", args.only,
         "--workbench-out", os.path.join(cell_dir, "results"),
         "--workbench-timeout", str(args.timeout),
@@ -56,7 +60,11 @@ def run_cell(cell, args, out_root):
     ]
     with open(os.path.join(cell_dir, "command.txt"), "w", encoding="utf-8") as f:
         f.write(subprocess.list2cmdline(cmd))
+    return cell_dir, cmd
 
+
+def run_cell(cell, args, out_root):
+    cell_dir, cmd = prepare_cell(cell, args, out_root)
     timed_out, code = False, None
     try:
         code = subprocess.run(cmd, cwd=os.path.dirname(cell.exe), timeout=args.timeout + 120).returncode

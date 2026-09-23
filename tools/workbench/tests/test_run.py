@@ -44,5 +44,18 @@ class Tail(unittest.TestCase):
             os.unlink(f.name)
 
 
+class PrepareCell(unittest.TestCase):
+    def test_profile_is_copied_into_the_cell_and_never_passed_directly(self):
+        # the engine writes settings back into the --config file; the source profile must stay untouched
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--only", "x"])
+            cell = run.Cell("dev", sys.executable, "default", 0)
+            cell_dir, cmd = run.prepare_cell(cell, args, out)
+            cfg = cmd[cmd.index("--config") + 1]
+            self.assertTrue(cfg.startswith(cell_dir))
+            with open(cfg) as a, open(os.path.join(run.HERE, "profiles", "default.cfg")) as b:
+                self.assertEqual(a.read(), b.read())
+
+
 if __name__ == "__main__":
     unittest.main()
