@@ -11,6 +11,7 @@
 	[MODOPTIONS]
 	{
 		maxunits=10000;
+		deathmode=neverend;
 	}
 	[PLAYER0]
 	{

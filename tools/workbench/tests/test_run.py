@@ -118,6 +118,13 @@ class Seed(unittest.TestCase):
         s = run.render_startscript("MapName=$MAP;\nFixedRNGSeed=$SEED;", "M", seed=1234)
         self.assertIn("FixedRNGSeed=1234;", s)
 
+    def test_games_never_end_on_their_own(self):
+        # a scenario must not end the game underneath the workbench (the headless engine
+        # quits on game over), so every start script sets BAR's never-ending death mode
+        for t in ("startscript.txt", "startscript_spectate.txt"):
+            with open(os.path.join(run.HERE, "templates", t), encoding="utf-8") as f:
+                self.assertIn("deathmode=neverend;", f.read())
+
     def test_default_seed_zero_means_random(self):
         self.assertIn("FixedRNGSeed=0;", run.render_startscript("FixedRNGSeed=$SEED;", "M"))
 

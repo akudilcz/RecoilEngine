@@ -290,7 +290,7 @@ def parse_args(argv):
         name, _, path = spec.partition("=")
         if not path or not os.path.exists(path):
             p.error(f"--engine {spec}: expected NAME=PATH to an existing spring.exe")
-        engines[name] = path
+        engines[name] = os.path.abspath(path)  # the engine runs with its own dir as cwd
     args.engines = engines
     return args
 
