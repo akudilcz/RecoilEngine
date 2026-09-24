@@ -14,9 +14,7 @@
 CR_BIND(CCobEngine, )
 
 CR_REG_METADATA(CCobEngine, (
-	CR_MEMBER(threadSlots),
-	CR_MEMBER(freeSlots),
-	CR_MEMBER(threadSlotIndex),
+	CR_MEMBER(threadInstances),
 	CR_MEMBER(tickAddedThreads),
 	CR_MEMBER(tickRemovedThreads),
 	CR_MEMBER(runningThreadIDs),
@@ -46,41 +44,24 @@ int CCobEngine::AddThread(CCobThread&& thread)
 		thread.SetID(GenThreadID());
 
 	CCobInstance* o = thread.cobInst;
-
-	int slot = -1;
-	if (freeSlots.empty()) {
-		slot = static_cast<int>(threadSlots.size());
-		threadSlots.emplace_back();
-	} else {
-		slot = freeSlots.back();
-		freeSlots.pop_back();
-	}
-
-	CCobThread& t = threadSlots[slot];
-	threadSlotIndex[thread.GetID()] = slot;
+	CCobThread& t = threadInstances[thread.GetID()];
 
 	// move thread into registry, hand its ID to owner
 	t = std::move(thread);
 	o->AddThreadID(t.GetID());
 
-	TracyPlot(numCobThreadsPlot, static_cast<int64_t>(threadSlotIndex.size()));
+	TracyPlot(numCobThreadsPlot, static_cast<int64_t>(threadInstances.size()));
 
 	return (t.GetID());
 }
 
 bool CCobEngine::RemoveThread(int threadID) {
 	RECOIL_DETAILED_TRACY_ZONE;
-	const auto it = threadSlotIndex.find(threadID);
+	const auto it = threadInstances.find(threadID);
 
-	if (it != threadSlotIndex.end()) {
-		const int slot = it->second;
-		threadSlotIndex.erase(it);
-		// same as erasing from a map: the thread is destroyed (its stacks go back to the
-		// free lists) and the slot holds a fresh empty thread until it is reused
-		threadSlots[slot].~CCobThread();
-		new (&threadSlots[slot]) CCobThread();
-		freeSlots.push_back(slot);
-		TracyPlot(numCobThreadsPlot, static_cast<int64_t>(threadSlotIndex.size()));
+	if (it != threadInstances.end()) {
+		threadInstances.erase(it);
+		TracyPlot(numCobThreadsPlot, static_cast<int64_t>(threadInstances.size()));
 		return true;
 	}
 
@@ -97,7 +78,7 @@ void CCobEngine::ProcessQueuedThreads() {
 	}
 	tickRemovedThreads.clear();
 
-	// move new threads spawned by START into their slots;
+	// move new threads spawned by START into threadInstances;
 	// their ID's will already have been scheduled into either
 	// waitingThreadIDs or sleepingThreadIDs
 	for (CCobThread& t: tickAddedThreads) {
@@ -129,8 +110,8 @@ void CCobEngine::SanityCheckThreads(const CCobInstance* owner)
 	RECOIL_DETAILED_TRACY_ZONE;
 	if (false) {
 		// no threads belonging to owner should be left
-		for (const auto& p: threadSlotIndex) {
-			assert(threadSlots[p.second].cobInst != owner);
+		for (const auto& p: threadInstances) {
+			assert(p.second.cobInst != owner);
 		}
 		for (const CCobThread& t: tickAddedThreads) {
 			assert(t.cobInst != owner);

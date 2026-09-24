@@ -8,13 +8,11 @@
  * It also manages reading and caching of the actual .cob files.
  */
 
-#include <deque>
 #include <vector>
 
 #include "CobThread.h"
 #include "CobDeferredCallin.h"
 #include "System/creg/creg_cond.h"
-#include "System/creg/STL_Deque.h"
 #include "System/creg/STL_Queue.h"
 #include "System/creg/STL_Map.h"
 #include "System/Cpp11Compat.hpp"
@@ -45,8 +43,7 @@ public:
 
 public:
 	void Init() {
-		freeSlots.reserve(4096);
-		threadSlotIndex.reserve(4096);
+		threadInstances.reserve(2048);
 		tickAddedThreads.reserve(128);
 
 		runningThreadIDs.reserve(512);
@@ -60,10 +57,9 @@ public:
 		threadCounter = 0;
 	}
 	void Kill() {
-		// the slot index is only iterated during sync dumps; clean it with clear_unordered_map
-		threadSlots.clear();
-		freeSlots.clear();
-		spring::clear_unordered_map(threadSlotIndex);
+		// threadInstances is never explicitly iterated in the actual code,
+		// but iterated during sync dumps, so clean it with clear_unordered_map
+		spring::clear_unordered_map(threadInstances);
 		spring::clear_unordered_map(deferredCallins);
 		tickAddedThreads.clear();
 
@@ -80,12 +76,12 @@ public:
 
 
 	CCobThread* GetThread(int threadID) {
-		const auto it = threadSlotIndex.find(threadID);
+		const auto it = threadInstances.find(threadID);
 
-		if (it == threadSlotIndex.end())
+		if (it == threadInstances.end())
 			return nullptr;
 
-		return &threadSlots[it->second];
+		return &(it->second);
 	}
 
 	bool RemoveThread(int threadID);
@@ -99,10 +95,7 @@ public:
 	void ScheduleThread(const CCobThread* thread);
 	void SanityCheckThreads(const CCobInstance* owner);
 
-	// live threads: id -> slot in GetThreadSlots()
-	const auto& GetThreadSlotIndex() const { return threadSlotIndex; }
-	const auto& GetThreadSlots() const { return threadSlots; }
-	size_t GetNumThreads() const { return threadSlotIndex.size(); }
+	const auto& GetThreadInstances() const { return threadInstances; }
 //	const auto& GetTickAddedThreads() const { return tickAddedThreads; }
 //	const auto& GetTickRemovedThreads() const { return tickRemovedThreads; }
 //	const auto& GetRunningThreadIDs() const { return runningThreadIDs; }
@@ -122,13 +115,7 @@ private:
 
 private:
 	// registry of every thread across all script instances
-	// live threads live in reusable slots (a map keyed by id with the thread as value
-	// moved a ~150-byte object per insert and rehashed under load; with thousands of
-	// short-lived aim/animation threads per frame that was ~15% of a big battle's sim time);
-	// a deque so growing it never moves threads a caller up the stack may still point at
-	std::deque<CCobThread> threadSlots;
-	std::vector<int> freeSlots;
-	spring::unordered_map<int, int> threadSlotIndex;
+	spring::unordered_map<int, CCobThread> threadInstances;
 	// threads that are spawned during Tick
 	std::vector<CCobThread> tickAddedThreads;
 	// threads that are killed during Tick
