@@ -116,7 +116,10 @@ void UDPListener::Update(int loopSleepTime) {
 			(loopSleepTime / 1000),       // long tv_sec
 			(loopSleepTime % 1000) * 1000 // long tv_usec
 		};
-		::select(1, &rset, nullptr, nullptr, &to);
+		// nfds is the highest descriptor + 1 (ignored on Windows). It used to be 1, which on
+		// POSIX only watched fd 0 (stdin): with stdin readable (e.g. /dev/null, as for a
+		// dedicated or scripted server) select returned at once and the net thread spun.
+		::select(static_cast<int>(socket->native_handle()) + 1, &rset, nullptr, nullptr, &to);
 	}
 
 	size_t bytesAvailable = 0;
