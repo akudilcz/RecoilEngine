@@ -2,7 +2,8 @@
 # Samples a running workbench scenario with perf (Linux): starts the scenario on the
 # headless engine, attaches once "[Workbench] scenario <name>" appears in the infolog,
 # records SECONDS of call-graph samples, then writes self/inclusive hot-function reports.
-#   tools/workbench/profile.sh <scenario> [seconds] [engine] [data-dir]
+#   [SIM_SPEED=max|1|...] tools/workbench/profile.sh <scenario> [seconds] [engine] [data-dir]
+# Default SIM_SPEED=max: the sim runs flat out, so it (not idle waiting) dominates the samples.
 # Needs perf and kernel.perf_event_paranoid <= 1 (sudo sysctl kernel.perf_event_paranoid=-1).
 set -euo pipefail
 SCENARIO="$1"
@@ -13,7 +14,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="$HERE/results/profile-$SCENARIO-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$OUT"
 
-python3 "$HERE/run.py" --only "$SCENARIO" --seed 1234 --no-report --timeout 900 \
+python3 "$HERE/run.py" --only "$SCENARIO" --seed 1234 --no-report --timeout 900 --sim-speed "${SIM_SPEED:-max}" \
 	--engine "prof=$ENGINE" --data-dir "$DATA" --out "$OUT/run" > "$OUT/run.log" 2>&1 &
 RUN=$!
 
