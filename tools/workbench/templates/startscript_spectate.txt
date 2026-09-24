@@ -10,7 +10,7 @@
 	StartPosType=3;
 	[MODOPTIONS]
 	{
-		maxunits=10000;
+		maxunits=32000;
 		deathmode=neverend;
 	}
 	[PLAYER0]
