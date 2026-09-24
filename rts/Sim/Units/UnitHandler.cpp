@@ -47,10 +47,6 @@ CR_REG_METADATA(CUnitHandler, (
 	CR_MEMBER(unitsByDefs),
 	CR_MEMBER(activeUnits),
 	CR_MEMBER(unitsToBeRemoved),
-	CR_IGNORED(deletedUnits),
-	CR_IGNORED(deletedUnitsSorted),
-	CR_IGNORED(gcPendingUnits),
-	CR_IGNORED(deletingUnits),
 
 	CR_MEMBER(builderCAIs),
 
@@ -254,15 +250,16 @@ bool CUnitHandler::GarbageCollectUnit(unsigned int id)
 	// the queue can still hold units killed on a previous frame; process only
 	// this one now (via DeleteUnits, which also unlinks it from activeUnits)
 	// and leave the others queued for the next Update
-	gcPendingUnits.clear();
-	gcPendingUnits.swap(unitsToBeRemoved);
-	spring::VectorEraseAll(gcPendingUnits, unit);
+	static std::vector<CUnit*> pendingUnits;
+	pendingUnits.clear();
+	pendingUnits.swap(unitsToBeRemoved);
+	spring::VectorEraseAll(pendingUnits, unit);
 	unitsToBeRemoved.push_back(unit);
 
 	DeleteUnits();
 
 	assert(unitsToBeRemoved.empty());
-	unitsToBeRemoved.swap(gcPendingUnits);
+	unitsToBeRemoved.swap(pendingUnits);
 
 	return (idPool.RecycleID(id));
 }
@@ -303,18 +300,11 @@ void CUnitHandler::DeleteUnits()
 	// activeUnits individually, i.e. an O(n) scan-and-shift per dying unit.
 	// Run the per-unit side effects below in the same (LIFO) order as
 	// before -- that ordering matters for the RenderUnitDestroyed callin
-	// and team bookkeeping -- but unlink them from activeUnits in a single
-	// order-preserving compaction pass afterwards.
-	//
-	// Memory is only freed after that pass: until then activeUnits still
-	// lists units already processed in this batch, and a callin run for a
-	// later unit (e.g. RenderUnitDestroyed -> Lua Spring.GetAllUnits) may
-	// read them, so they must stay valid. It also means no freed block can
-	// be reused for a new unit, and so alias a live pointer, before the
-	// compaction compares pointers.
-	assert(!deletingUnits);
-	deletingUnits = true;
-
+	// and team bookkeeping -- but defer unlinking them from activeUnits to
+	// a single order-preserving compaction pass once all of them are gone,
+	// which touches the (potentially large) activeUnits vector exactly once
+	// per frame instead of once per dead unit.
+	static std::vector<CUnit*> deletedUnits;
 	deletedUnits.clear();
 	deletedUnits.reserve(unitsToBeRemoved.size());
 
@@ -326,17 +316,30 @@ void CUnitHandler::DeleteUnits()
 		DeleteUnit(delUnit);
 	}
 
-	deletedUnitsSorted.assign(deletedUnits.begin(), deletedUnits.end());
-	std::sort(deletedUnitsSorted.begin(), deletedUnitsSorted.end());
-	activeSlowUpdateUnit -= spring::VectorEraseSorted(activeUnits, deletedUnitsSorted, activeSlowUpdateUnit);
+	// deletedUnits holds only stale (already-freed) pointer *values*; they
+	// are never dereferenced below, only compared for identity against the
+	// (still valid) pointers still in activeUnits
+	std::sort(deletedUnits.begin(), deletedUnits.end());
 
-	// free in the original (LIFO) order
-	for (CUnit* delUnit: deletedUnits) {
-		FreeUnit(delUnit);
+	size_t writeIdx = 0;
+	size_t numErasedBeforeCursor = 0;
+
+	for (size_t readIdx = 0; readIdx < activeUnits.size(); ++readIdx) {
+		CUnit* u = activeUnits[readIdx];
+
+		if (std::binary_search(deletedUnits.begin(), deletedUnits.end(), u)) {
+			// equivalent to decrementing activeSlowUpdateUnit once for
+			// every removed unit whose (pre-removal) index was below it,
+			// same as the old per-unit erase() did one at a time
+			numErasedBeforeCursor += (readIdx < activeSlowUpdateUnit);
+			continue;
+		}
+
+		activeUnits[writeIdx++] = u;
 	}
-	deletedUnits.clear();
 
-	deletingUnits = false;
+	activeUnits.resize(writeIdx);
+	activeSlowUpdateUnit -= numErasedBeforeCursor;
 }
 
 void CUnitHandler::DeleteUnit(CUnit* delUnit)
@@ -361,12 +364,7 @@ void CUnitHandler::DeleteUnit(CUnit* delUnit)
 	idPool.FreeID(delUnit->id, true);
 
 	units[delUnit->id] = nullptr;
-}
 
-// releases a unit's memory once DeleteUnit's side effects have run for the whole batch
-void CUnitHandler::FreeUnit(CUnit* delUnit)
-{
-	RECOIL_DETAILED_TRACY_ZONE;
 	entt::entity delUnitEntity = delUnit->entityReference;
 
 	CSolidObject::SetDeletingRefID(delUnit->id);
