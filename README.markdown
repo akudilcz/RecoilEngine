@@ -1,19 +1,18 @@
 # Recoil, tuned and tested
 
-**A Recoil engine fork for [Beyond All Reason](https://www.beyondallreason.info) that plays smoother in big battles, fixes bugs upstream hasn't gotten to yet, and checks itself with a built-in testbench that plays the game for you.**
+**A Recoil engine fork for [Beyond All Reason](https://www.beyondallreason.info) that fixes bugs upstream hasn't gotten to yet, keeps its controls working when the frame rate drops, and checks itself with a built-in testbench that plays the game for you.**
 
 Paired with the game fork [akudilcz/Beyond-All-Reason](https://github.com/akudilcz/Beyond-All-Reason). Built on upstream [Recoil](https://github.com/beyond-all-reason/RecoilEngine) and kept level with it.
 
 | | |
 |---|---|
 | **Tested** | 747 per-unit game-logic checks in about 3.5 minutes, plus a 2-minute smoke suite, C++ unit tests, and a bit-for-bit replay check |
-| **Faster where it hurts** | ~15% less simulation time in a large battle (`big_battle`: 24.3 to 20.7 ms per frame, median of 3 runs; merged gameplay fixes also change that battle, so part of the gap may be a different fight) |
+| **Measured, not assumed** | Performance claims are A/B-tested on identical seeded battles. Current result: our optimisation patches make no measurable difference yet (every scenario within run-to-run noise, 5 runs each), so the next work targets where the time really goes: unit movement and unit scripts ([results](doc/workbench/RESULTS.md)) |
 | **Fixes** | Bugs found by the testbench and code review (including two use-after-frees in our own patches and a GPU-timer hang in upstream), fixed, most with a test guarding them, plus 21 reviewed community PRs upstream hasn't merged |
 | **Same game** | Our simulation patches don't change results: a 3,000-frame seeded battle replays identically, checksum for checksum, with and without them |
 
 ## For players
 
-- **Big fights feel better.** Rendering and simulation patches cut work that upstream repeats every frame: model data re-uploaded only when it changes, water reflections skipped when no water is on screen, instanced grass, parallel line-of-sight and transform updates, fewer pathfinding allocations.
 - **Controls that hold up when the frame rate drops.** With hundreds of units and low FPS, box selection could select nothing and shift-dragging a row of buildings placed only one. Both are fixed, and a test drags the mouse inside a single ~8 fps frame to keep them fixed.
 - **Fewer crashes and glitches.** For example: a crash in `GetUnitsInPlanes`, strafing aircraft stuck in the air after a short move, LOS and radar overlays showing the wrong team after switching views, reflections left blank after a map reload.
 

@@ -4,6 +4,22 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-09-24: do our performance patches speed the engine up? (A/B, identical battles)
+
+**noperf** = master with only our performance patches reverted (merged community PRs, fixes, workbench and the non-blocking GPU timer kept), so both engines simulate the same battles; `--seed 1234`, 5 interleaved repetitions each, median of per-window p50 (ms).
+
+| Scenario | Metric | noperf | dev | change | verdict |
+|---|---|---|---|---|---|
+| big_battle | frame | 27.82 | 25.60 | -8.0% | same (noperf 22.3-28.7, dev 23.8-28.2) |
+| big_battle | sim | 26.34 | 25.61 | -2.8% | same |
+| big_battle | GPU | 30.24 | 28.56 | -5.6% | same |
+| mass_move_500 | frame / sim | 14.45 / 6.40 | 14.43 / 6.37 | ~0% | same |
+| mass_move_2000 | frame / sim | 26.05 / 16.92 | 25.90 / 16.75 | ~-1% | same |
+| mass_move_5000 | frame / sim / GPU | 14.70 / 45.60 / 31.96 | 15.23 / 45.61 / 31.50 | +3.6% / 0% / -1.5% | same |
+| render_baseline | frame / GPU | 13.86 / 11.75 | 13.36 / 11.87 | -3.6% / +1.0% | same |
+
+**Conclusion: no measurable speed-up.** Every difference is inside run-to-run noise. The earlier "big_battle sim -14.9%" (base vs dev, below) came from the merged community PRs changing the battle, not from faster code. Where the time goes (dev, ms per sim frame): at 5000 units `Sim` 45 = `Sim::Unit::MoveType` 24 + unit scripts (`CUnitScriptEngine::Tick`) 11, with thread-pool wait time showing the parallel sections are not keeping cores busy; in `big_battle`, `Sim::Unit::SlowUpdate` 20, unsynced Lua callins (BAR widgets) 11, `TransformsUploader::Update` 7. Those are the targets for real gains.
+
 ## 2026-09-24: game logic coverage, update (dev, max sim speed)
 
 After the fixes below, the whole logic set passes: `unit_movement` 346/346, `ship_movement` 104/104, `weapon_range_all` 238/238, `air_attack` 18/18, `unit_behaviours` 41/41 (restricted to the tech tree players can reach; the earlier 94 included scavenger and evolution-only defs). Wall clock: 219 s for all five, against ~58 min at 1x.
