@@ -13,7 +13,6 @@
 #include "System/creg/STL_Set.h"
 #include "System/EventHandler.h"
 #include "System/TimeProfiler.h"
-#include "System/Threading/ThreadPool.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -191,15 +190,9 @@ void CFeatureHandler::UpdatePreFrame()
 {
 	SCOPED_TIMER("Sim::Features::UpdatePreFrame");
 
-	// activeFeatureIDs is an unordered_set; snapshot into a flat buffer so the
-	// per-feature work (order-independent, writes only each feature's own state)
-	// can be split across threads
-	static std::vector<int> updatePrevFrameIDs;
-	updatePrevFrameIDs.assign(activeFeatureIDs.begin(), activeFeatureIDs.end());
-
-	for_mt(0, updatePrevFrameIDs.size(), [this](const int i) {
-		features[updatePrevFrameIDs[i]]->UpdatePrevFrameTransform();
-	});
+	for (auto fid : activeFeatureIDs) {
+		features[fid]->UpdatePrevFrameTransform();
+	}
 }
 
 void CFeatureHandler::Update()

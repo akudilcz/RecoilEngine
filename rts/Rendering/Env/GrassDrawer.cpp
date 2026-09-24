@@ -15,7 +15,6 @@
 #include "Rendering/Env/CubeMapHandler.h"
 #include "Rendering/GL/myGL.h"
 #include "Rendering/GL/FBO.h"
-#include "Rendering/GL/VertexArray.h"
 #include "Rendering/Map/InfoTexture/IInfoTextureHandler.h"
 #include "Rendering/Shaders/ShaderHandler.h"
 #include "Rendering/Shaders/Shader.h"
@@ -187,13 +186,9 @@ CGrassDrawer::CGrassDrawer()
 , grassDL(0)
 , grassBladeTex(0)
 , farTex(0)
-, grassMeshVertexCount(0)
-, grassNumInstances(0)
-, grassFarVertsPerBlock(0)
-, grassNearBillboardVertCount(0)
+, farnearVA(2048)
 , grassOff(false)
 , updateBillboards(false)
-, updateNearBillboards(false)
 , updateVisibility(false)
 {
 	blockDrawer.ResetState();
@@ -254,6 +249,7 @@ CGrassDrawer::CGrassDrawer()
 
 	// create shaders and finalize
 	grass.resize(blocksX * blocksY);
+	farnearVA.Initialize();
 	grassDL = glGenLists(1);
 
 	ChangeDetail(detail);
@@ -291,27 +287,7 @@ void CGrassDrawer::ChangeDetail(int detail) {
 
 	// recreate textures & XBOs
 	CreateGrassDispList(grassDL);
-	CreateGrassMeshBuffers();
 	CreateFarTex();
-
-	// the near-mesh instance buffer no longer matches the (possibly resized) turf mesh;
-	// it gets rebuilt from scratch as soon as the next visibility update runs
-	grassNumInstances = 0;
-
-	// (re)allocate the pooled far-billboard VBO: one fixed-size slot per grass block,
-	// sized for the new turf count; existing GPU content is invalidated
-	grassFarVertsPerBlock = grassBlockSize * grassBlockSize * numTurfs * 4;
-	grassFarVBO.Bind(GL_ARRAY_BUFFER);
-	grassFarVBO.New((GLsizeiptr)(grass.size() * size_t(grassFarVertsPerBlock) * sizeof(VA_TYPE_TN)), GL_DYNAMIC_DRAW);
-	grassFarVBO.Unbind();
-
-	for (size_t i = 0; i < grass.size(); ++i) {
-		grass[i].vboVertOffset = (unsigned int)(i * grassFarVertsPerBlock);
-		grass[i].vboVertCount = 0;
-	}
-
-	// same story for the combined near-billboard buffer
-	grassNearBillboardVertCount = 0;
 
 	// reset  all cached blocks
 	for (GrassStruct& pGS: grass) {
@@ -346,10 +322,6 @@ void CGrassDrawer::LoadGrassShaders() {
 		grassShaders[i] = sh->CreateProgramObject("[GrassDrawer]", shaderNames[i] + "GLSL");
 		grassShaders[i]->AttachShaderObject(sh->CreateShaderObject("GLSL/GrassVertProg.glsl", shaderDefines[i], GL_VERTEX_SHADER));
 		grassShaders[i]->AttachShaderObject(sh->CreateShaderObject("GLSL/GrassFragProg.glsl", shaderDefines[i], GL_FRAGMENT_SHADER));
-		// per-instance (pos, rotation) transform for the instanced near-mesh draw;
-		// pin it to a fixed, conventionally-unused attribute slot so the VAO setup
-		// in CreateGrassMeshBuffers() can rely on a stable location
-		grassShaders[i]->BindAttribLocation("instanceTransform", 6);
 		grassShaders[i]->Link();
 
 		grassShaders[i]->Enable();
@@ -420,20 +392,9 @@ static float3 GetTurfParams(GrassRNG& rng, const int x, const int y)
 
 
 
-// per-instance (world position, rotation-degrees around up-axis) turf transform,
-// matches the vec4 "instanceTransform" vertex attribute
-struct GrassInstanceData {
-	float3 pos;
-	float  rot;
-};
-
-void CGrassDrawer::RebuildNearInstances(const std::vector<InviewNearGrass>& inviewGrass)
+void CGrassDrawer::DrawNear(const std::vector<InviewNearGrass>& inviewGrass)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-
-	std::vector<GrassInstanceData> instances;
-	instances.reserve(inviewGrass.size() * numTurfs);
-
 	for (const InviewNearGrass& g: inviewGrass) {
 		grng.Seed(g.y * mapDims.mapx / grassSquareSize + g.x);
 
@@ -448,28 +409,13 @@ void CGrassDrawer::RebuildNearInstances(const std::vector<InviewNearGrass>& invi
 			pos.y -= CGround::GetSlope(p.x, p.y, false) * 30.0f;
 			pos.y -= 2.0f * mapInfo->grass.bladeHeight * alpha;
 
-			instances.push_back({ pos, p.z });
+			glPushMatrix();
+			glTranslatef3(pos);
+			glRotatef(p.z, 0.0f, 1.0f, 0.0f);
+			glCallList(grassDL);
+			glPopMatrix();
 		}
 	}
-
-	grassNumInstances = (unsigned int)instances.size();
-
-	grassInstanceVBO.Bind(GL_ARRAY_BUFFER);
-	if (!instances.empty())
-		grassInstanceVBO.New(instances, GL_DYNAMIC_DRAW);
-	grassInstanceVBO.Unbind();
-}
-
-
-void CGrassDrawer::DrawNear()
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-	if (grassNumInstances == 0 || grassMeshVertexCount == 0)
-		return;
-
-	grassMeshVAO.Bind();
-	glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei)grassMeshVertexCount, (GLsizei)grassNumInstances);
-	grassMeshVAO.Unbind();
 }
 
 
@@ -499,17 +445,15 @@ void CGrassDrawer::DrawBillboard(const int x, const int y, const float dist, VA_
 void CGrassDrawer::DrawFarBillboards(const std::vector<GrassStruct*>& inviewFarGrass)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	// update far grass blocks; content is generated in parallel (CPU only), the
-	// GPU-resident VBO is only touched (SetBufferSubData) for blocks that actually changed
+	// update far grass blocks
 	if (updateBillboards) {
 		updateBillboards = false;
-
-		std::vector<std::vector<VA_TYPE_TN>> pendingVerts(inviewFarGrass.size());
 
 		for_mt(0, inviewFarGrass.size(), [&](const int i) {
 			GrassStruct& g = *inviewFarGrass[i];
 
 			if (g.lastFar == 0) {
+				// TODO: VA's need to be uploaded each frame, switch to VBO's
 				// force the patch-quads to be recreated
 				g.lastFar = globalRendering->drawFrame;
 				g.lastDist = -1.0f;
@@ -527,99 +471,43 @@ void CGrassDrawer::DrawFarBillboards(const std::vector<GrassStruct*>& inviewFarG
 				return;
 
 			g.lastDist = distSq;
+			CVertexArray* va = &g.va;
+			va->Initialize();
 
-			// (4*4)*numTurfs quads, written into this block's fixed slot in grassFarVBO
-			std::vector<VA_TYPE_TN>& blockVerts = pendingVerts[i];
-			blockVerts.reserve(grassFarVertsPerBlock);
-
+			// (4*4)*numTurfs quads
 			for (int y2 = g.posZ * grassBlockSize; y2 < (g.posZ + 1) * grassBlockSize; ++y2) {
 				for (int x2 = g.posX * grassBlockSize; x2 < (g.posX  + 1) * grassBlockSize; ++x2) {
 					if (!grassMap[y2 * mapDims.mapx / grassSquareSize + x2])
 						continue;
 
 					const float dist = GetGrassBlockCamDist(x2, y2);
-					const size_t base = blockVerts.size();
-					blockVerts.resize(base + numTurfs * 4);
-					DrawBillboard(x2, y2, dist, &blockVerts[base]);
+					auto* va_tn = va->GetTypedVertexArray<VA_TYPE_TN>(numTurfs * 4);
+					DrawBillboard(x2, y2, dist, va_tn);
 				}
 			}
-
-			g.vboVertCount = (unsigned int)blockVerts.size();
 		});
-
-		// upload the changed blocks; must happen on the GL (main) thread
-		grassFarVBO.Bind(GL_ARRAY_BUFFER);
-		for (size_t i = 0; i < inviewFarGrass.size(); ++i) {
-			if (!pendingVerts[i].empty())
-				grassFarVBO.SetBufferSubData(pendingVerts[i], inviewFarGrass[i]->vboVertOffset);
-		}
-		grassFarVBO.Unbind();
 	}
 
-	if (inviewFarGrass.empty())
-		return;
-
-	// render far grass blocks straight from the shared, GPU-resident VBO
-	grassFarVBO.Bind(GL_ARRAY_BUFFER);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_NORMAL_ARRAY);
-
-	glVertexPointer  (3, GL_FLOAT, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, pos));
-	glTexCoordPointer(2, GL_FLOAT, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, s));
-	glNormalPointer  (   GL_FLOAT, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, n));
-
+	// render far grass blocks
 	for (GrassStruct* g: inviewFarGrass) {
-		if (g->vboVertCount != 0)
-			glDrawArrays(GL_QUADS, (GLint)g->vboVertOffset, (GLsizei)g->vboVertCount);
+		g->va.DrawArrayTN(GL_QUADS);
 	}
-
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-	grassFarVBO.Unbind();
 }
 
 
 void CGrassDrawer::DrawNearBillboards(const std::vector<InviewNearGrass>& inviewNearGrass)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (updateNearBillboards) {
-		updateNearBillboards = false;
-
-		std::vector<VA_TYPE_TN> verts(inviewNearGrass.size() * numTurfs * 4);
+	if (farnearVA.drawIndex() == 0) {
+		auto* va_tn = farnearVA.GetTypedVertexArray<VA_TYPE_TN>(inviewNearGrass.size() * numTurfs * 4);
 
 		for_mt(0, inviewNearGrass.size(), [&](const int i) {
 			const InviewNearGrass& gi = inviewNearGrass[i];
-			DrawBillboard(gi.x, gi.y, gi.dist, &verts[i * numTurfs * 4]);
+			DrawBillboard(gi.x, gi.y, gi.dist, &va_tn[i * numTurfs * 4]);
 		});
-
-		grassNearBillboardVertCount = (unsigned int)verts.size();
-
-		grassNearBillboardVBO.Bind(GL_ARRAY_BUFFER);
-		if (!verts.empty())
-			grassNearBillboardVBO.New(verts, GL_DYNAMIC_DRAW);
-		grassNearBillboardVBO.Unbind();
 	}
 
-	if (grassNearBillboardVertCount == 0)
-		return;
-
-	grassNearBillboardVBO.Bind(GL_ARRAY_BUFFER);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_NORMAL_ARRAY);
-
-	glVertexPointer  (3, GL_FLOAT, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, pos));
-	glTexCoordPointer(2, GL_FLOAT, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, s));
-	glNormalPointer  (   GL_FLOAT, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, n));
-
-	glDrawArrays(GL_QUADS, 0, (GLsizei)grassNearBillboardVertCount);
-
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-	grassNearBillboardVBO.Unbind();
+	farnearVA.DrawArrayTN(GL_QUADS);
 }
 
 
@@ -644,17 +532,13 @@ void CGrassDrawer::Update()
 		blockDrawer.gd = this;
 		readMap->GridVisibility(nullptr, &blockDrawer, maxGrassDist, blockMapSize);
 
-		// near mesh grass is instanced; only rebuild the (pos, rotation) instance
-		// buffer now, instead of re-deriving every turf's transform each frame
-		RebuildNearInstances(blockDrawer.inviewGrass);
-
 		// ATI crashes w/o an error when shadows are enabled!?
        const bool shadows = (shadowHandler.ShadowsLoaded() && globalRendering->amdHacks);
 
 		if (!shadows) {
 			std::sort(blockDrawer.inviewFarGrass.begin(), blockDrawer.inviewFarGrass.end(), GrassSort);
 			std::sort(blockDrawer.inviewNearGrass.begin(), blockDrawer.inviewNearGrass.end(), GrassSortNear);
-			updateNearBillboards = true;
+			farnearVA.Initialize();
 			updateBillboards = true;
 		}
 
@@ -683,9 +567,9 @@ void CGrassDrawer::Draw()
 	glPushAttrib(GL_CURRENT_BIT);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
-	if (grassNumInstances > 0) {
+	if (!blockDrawer.inviewGrass.empty()) {
 		SetupGlStateNear();
-			DrawNear();
+			DrawNear(blockDrawer.inviewGrass);
 		ResetGlStateNear();
 	}
 
@@ -936,120 +820,6 @@ void CGrassDrawer::CreateGrassDispList(int listNum)
 	glNewList(listNum, GL_COMPILE);
 	va->DrawArrayTN(GL_TRIANGLE_STRIP);
 	glEndList();
-}
-
-
-// builds the static turf mesh (same blade geometry as CreateGrassDispList, re-seeded
-// identically so both stay visually in sync) as a plain GL_TRIANGLES VBO, and wires up
-// the VAO used to instance-draw it with a per-turf (pos, rotation) transform
-void CGrassDrawer::CreateGrassMeshBuffers()
-{
-	RECOIL_DETAILED_TRACY_ZONE;
-
-	std::vector<VA_TYPE_TN> meshVerts;
-	std::vector<VA_TYPE_TN> stripVerts;
-	meshVerts.reserve(strawPerTurf * 16 * 3);
-
-	grng.Seed(15);
-
-	for (int a = 0; a < strawPerTurf; ++a) {
-		// draw a single blade -- geometry kept identical to CreateGrassDispList
-		stripVerts.clear();
-
-		const float lngRnd = grng.NextFloat();
-		const float length = mapInfo->grass.bladeHeight * (1.0f + lngRnd);
-		const float maxAng = mapInfo->grass.bladeAngle * std::max(grng.NextFloat(), 1.0f - smoothstep(0.0f, 1.0f, lngRnd));
-
-		float3 sideVect;
-		sideVect.x = grng.NextFloat() - 0.5f;
-		sideVect.z = grng.NextFloat() - 0.5f;
-		sideVect.ANormalize();
-		float3 bendVect = sideVect.cross(UpVector); // direction to bend into
-		sideVect *= mapInfo->grass.bladeWidth * (-0.15f * lngRnd + 1.0f);
-
-		const float3 basePos = grng.NextVector2D() * (turfSize - (bendVect * std::sin(maxAng) * length).Length2D());
-
-		// select one of the 16 color shadings
-		const float xtexCoord = grng.NextInt(16) / 16.0f;
-		const int numSections = 2 + int(maxAng * 1.2f + length * 0.2f);
-
-		float3 normalBend = -bendVect;
-
-		// start btm
-		stripVerts.push_back({ basePos + sideVect - float3(0.0f, 3.0f, 0.0f), xtexCoord              , 0.f, normalBend });
-		stripVerts.push_back({ basePos - sideVect - float3(0.0f, 3.0f, 0.0f), xtexCoord + (1.0f / 16), 0.f, normalBend });
-
-		for (float h = 0.0f; h < 1.0f; h += (1.0f / numSections)) {
-			const float ang = maxAng * h;
-			const float3 n = (normalBend * std::cos(ang) + UpVector * std::sin(ang)).ANormalize();
-			const float3 edgePos  = (UpVector * std::cos(ang) + bendVect * std::sin(ang)) * length * h;
-			const float3 edgePosL = edgePos - sideVect * (1.0f - h);
-			const float3 edgePosR = edgePos + sideVect * (1.0f - h);
-
-			stripVerts.push_back({ basePos + edgePosR, xtexCoord + (1.0f / 32) * h              , h, (n + sideVect * 0.04f).ANormalize() });
-			stripVerts.push_back({ basePos + edgePosL, xtexCoord - (1.0f / 32) * h + (1.0f / 16), h, (n - sideVect * 0.04f).ANormalize() });
-		}
-
-		// end top tip (single triangle)
-		const float3 edgePos = (UpVector * std::cos(maxAng) + bendVect * std::sin(maxAng)) * length;
-		const float3 n = (normalBend * std::cos(maxAng) + UpVector * std::sin(maxAng)).ANormalize();
-		stripVerts.push_back({ basePos + edgePos, xtexCoord + (1.0f / 32), 1.0f, n });
-
-		// convert this blade's GL_TRIANGLE_STRIP into independent GL_TRIANGLES,
-		// preserving strip winding order
-		for (size_t i = 0; i + 2 < stripVerts.size(); ++i) {
-			if (i & 1) {
-				meshVerts.push_back(stripVerts[i + 1]);
-				meshVerts.push_back(stripVerts[i]);
-				meshVerts.push_back(stripVerts[i + 2]);
-			} else {
-				meshVerts.push_back(stripVerts[i]);
-				meshVerts.push_back(stripVerts[i + 1]);
-				meshVerts.push_back(stripVerts[i + 2]);
-			}
-		}
-	}
-
-	grassMeshVertexCount = (unsigned int)meshVerts.size();
-
-	grassMeshVBO.Bind(GL_ARRAY_BUFFER);
-	if (!meshVerts.empty())
-		grassMeshVBO.New(meshVerts, GL_STATIC_DRAW);
-	grassMeshVBO.Unbind();
-
-	// force (re)generation of the instance VBO's GL id and clear any stale content;
-	// RebuildNearInstances() re-fills it (same id) once visibility is (re)computed
-	grassInstanceVBO.Bind(GL_ARRAY_BUFFER);
-	grassInstanceVBO.New(0, GL_DYNAMIC_DRAW);
-	grassInstanceVBO.Unbind();
-
-	grassMeshVAO.Bind();
-		grassMeshVBO.Bind(GL_ARRAY_BUFFER);
-
-		// aliases for the fixed-function attributes used by the vertex shader
-		// (gl_Vertex, gl_Normal, gl_MultiTexCoord0)
-		glEnableVertexAttribArray(0);
-		glVertexAttribDivisor(0, 0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, pos));
-
-		glEnableVertexAttribArray(2);
-		glVertexAttribDivisor(2, 0);
-		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, n));
-
-		glEnableVertexAttribArray(8);
-		glVertexAttribDivisor(8, 0);
-		glVertexAttribPointer(8, 2, GL_FLOAT, GL_FALSE, sizeof(VA_TYPE_TN), VA_TYPE_OFFSET(VA_TYPE_TN, s));
-
-		// per-instance (world pos, rotation-degrees) turf transform
-		grassInstanceVBO.Bind(GL_ARRAY_BUFFER);
-
-		glEnableVertexAttribArray(6);
-		glVertexAttribDivisor(6, 1);
-		glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(float) * 4, nullptr);
-
-	grassMeshVAO.Unbind();
-	grassInstanceVBO.Unbind();
-	grassMeshVBO.Unbind();
 }
 
 void CGrassDrawer::CreateGrassBladeTex(unsigned char* buf)

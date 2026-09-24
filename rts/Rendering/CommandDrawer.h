@@ -3,8 +3,6 @@
 #ifndef COMMAND_DRAWER_H
 #define COMMAND_DRAWER_H
 
-#include <vector>
-
 #include "System/UnorderedSet.hpp"
 
 struct Command;
@@ -24,10 +22,7 @@ public:
 
 	void Draw(const CCommandAI*, int queueDrawDepth = -1) const;
 	void DrawLuaQueuedUnitSetCommands() const;
-	// batches the build-site outline boxes for all given builders (grouped by
-	// team-color) into a single render-buffer submission, culling positions
-	// outside the camera frustum
-	void DrawQuedBuildingSquares(const std::vector<const CBuilderCAI*>& myBuilderCAIs, const std::vector<const CBuilderCAI*>& allyBuilderCAIs) const;
+	void DrawQuedBuildingSquares(const CBuilderCAI*) const;
 
 	void AddLuaQueuedUnit(const CUnit* unit, int queueDrawDepth = 0);
 

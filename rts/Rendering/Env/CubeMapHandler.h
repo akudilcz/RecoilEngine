@@ -4,7 +4,6 @@
 #define CUBEMAP_HANDLER_HDR
 
 #include "Rendering/GL/FBO.h"
-#include "System/float4.h"
 
 class CubeMapHandler {
 public:
@@ -28,13 +27,6 @@ private:
 	void CreateSpecularFace(unsigned int, unsigned int, const float3&, const float3&, const float3&);
 	void UpdateSpecularFace(unsigned int, unsigned int, const float3&, const float3&, const float3&, unsigned int, unsigned char*);
 
-	// returns true if anything the reflection cubemap depends on (camera
-	// position, heightmap, sun direction, sky or sun-lighting appearance)
-	// has changed since the last completed render cycle; conservative by
-	// design, i.e. defaults to "changed" whenever unsure
-	bool ReflectionInputsChanged() const;
-	void SnapshotReflectionInputs();
-
 	unsigned int envReflectionTexID; // sky and map
 	unsigned int skyReflectionTexID; // sky only
 	unsigned int specularTexID;
@@ -47,31 +39,6 @@ private:
 
 	bool mapSkyReflections;
 	bool generateMipMaps;
-
-	// set once a full face cycle has completed at least one time; until then
-	// (or after any relevant input changes) we keep refreshing every frame
-	bool reflectionCycleValid = false;
-
-	float3 lastReflectionCamPos;
-
-	float4 lastSunLightDir;
-
-	float3 lastSkyColor;
-	float3 lastSunColor;
-	float3 lastCloudColor;
-	float4 lastFogColor;
-	float  lastCloudDensity = 0.0f;
-	float4 lastSkyAxisAngle;
-
-	float4 lastGroundAmbientColor;
-	float4 lastGroundDiffuseColor;
-	float4 lastGroundSpecularColor;
-	float4 lastModelAmbientColor;
-	float4 lastModelDiffuseColor;
-	float4 lastModelSpecularColor;
-	float  lastSpecularExponent = 0.0f;
-	float  lastGroundShadowDensity = 0.0f;
-	float  lastModelShadowDensity = 0.0f;
 
 	std::vector<unsigned char> specTexPartBuf;
 	std::vector<unsigned char> specTexFaceBuf;

@@ -70,14 +70,6 @@ public:
 	static GL::GeometryBuffer* GetGeometryBuffer() { return geomBuffer; }
 
 private:
-	// LuaObjectDrawer has no instances of its own, so config-change
-	// notifications are routed through this small proxy object instead
-	struct ConfigNotifyProxy {
-		void ConfigNotify(const std::string& key, const std::string& value);
-	};
-
-	static ConfigNotifyProxy configNotifyProxy;
-
 	static void DrawMaterialBins(LuaObjType objType, LuaMatType matType, bool deferredPass);
 	static void DrawMaterialBin(
 		const LuaMatBin* currBin,
@@ -111,9 +103,6 @@ private:
 	static bool drawDeferredEnabled;
 	// whether deferred object drawing is allowed by user
 	static bool drawDeferredAllowed;
-	// cached "AllowDrawModelPostDeferredEvents" config value, kept in
-	// sync via ConfigNotifyProxy so Update() need not query it every frame
-	static bool allowDrawModelPostDeferredEvents;
 
 	// whether the deferred feature pass clears the GB
 	static bool bufferClearAllowed;

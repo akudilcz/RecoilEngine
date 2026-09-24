@@ -41,11 +41,6 @@ public:
 
 	bool CanDrawReflectionPass() const override { return true; }
 	bool CanDrawRefractionPass() const override { return true; }
-
-	// true if this map renders a water plane extending beyond the map edges
-	// (needed by CWorldDrawer to test the plane against the camera frustum
-	// even when no on-map terrain is below the water line)
-	bool HasEndlessOcean() const { return endlessOcean; }
 private:
 	//! coastmap (needed for shorewaves)
 	struct CoastAtlasRect {

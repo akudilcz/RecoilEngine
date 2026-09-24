@@ -386,14 +386,13 @@ bool LuaOpenGLUtils::ParseTextureImage(lua_State* L, LuaMatTexture& texUnit, con
 
 			// dynamic texture
 			const LuaTextures& textures = CLuaHandle::GetActiveTextures(L);
-			const size_t texIdx = textures.GetIdx(image);
-			const LuaTextures::Texture* texInfo = textures.GetInfo(texIdx);
+			const LuaTextures::Texture* texInfo = textures.GetInfo(image);
 
 			if (texInfo == nullptr)
 				return false;
 
 			texUnit.type = LuaMatTexture::LUATEX_LUATEXTURE;
-			texUnit.data = reinterpret_cast<const void*>(texIdx);
+			texUnit.data = reinterpret_cast<const void*>(textures.GetIdx(image));
 		} break;
 
 		case '%': {

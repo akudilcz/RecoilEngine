@@ -17,11 +17,6 @@ uniform vec3 sunDir;
 uniform vec3 ambientLightColor;
 uniform vec3 diffuseLightColor;
 
-// per-instance turf transform for the instanced near-mesh draw (DISTANCE_NEAR / SHADOW_GEN):
-// .xyz = world-space turf offset, .w = rotation in degrees around the up-axis.
-// unused (and left at its default) for the DISTANCE_FAR billboard draw.
-attribute vec4 instanceTransform;
-
 varying vec3 normal;
 varying vec4 shadingTexCoords;
 varying vec2 bladeTexCoords;
@@ -84,24 +79,12 @@ void main() {
 	gl_FrontColor = gl_Color;
 
 #ifndef DISTANCE_FAR
-	// mesh grass (instanced): each turf is rotated in place around the up-axis and then
-	// offset to its world position, replacing the per-turf glTranslatef/glRotatef +
-	// gl_ModelViewMatrix that used to be rebuilt on the CPU for every single turf.
-	float instRotRad = radians(instanceTransform.w);
-	float instRotSin = sin(instRotRad);
-	float instRotCos = cos(instRotRad);
-	// equivalent to glRotatef(instanceTransform.w, 0.0, 1.0, 0.0)
-	mat3 instRotMat = mat3(
-		vec3(instRotCos, 0.0, -instRotSin),
-		vec3(0.0,        1.0,  0.0       ),
-		vec3(instRotSin, 0.0,  instRotCos)
-	);
-
-	normal = instRotMat * gl_Normal;
-	vec3 objPos = instRotMat * gl_Vertex.xyz;
-	vec4 worldPos = vec4(objPos + instanceTransform.xyz, 1.0);
+	// mesh grass
+	normal = gl_NormalMatrix * gl_Normal;
+	vec4 worldPos = gl_ModelViewMatrix * gl_Vertex;
 
 	// anim
+	vec3 objPos = mat3(gl_ModelViewMatrix) * gl_Vertex.xyz;
 	worldPos.xyz += ApplyMainBending(objPos, windSpeed.xz, gl_MultiTexCoord0.s * 0.004 + 0.007) - objPos;
 	ApplyDetailBending(worldPos.xyz, normal,
 			gl_MultiTexCoord0.s,

@@ -352,18 +352,12 @@ void CSMFGroundTextures::DrawUpdate()
 	const float vsySq = globalRendering->viewSizeY * globalRendering->viewSizeY;
 	const float vdiag = fastmath::apxsqrt(vsxSq + vsySq);
 
-	// cap the number of (un)loads issued per draw-frame; each one is a
-	// synchronous PBO round-trip + glCompressedTexImage2D upload, and without
-	// a budget a camera cut/zoom can trigger dozens of these in one frame
-	static constexpr int MAX_SQUARE_LOADS_PER_FRAME = 4;
-	int numSquareLoadsLeft = MAX_SQUARE_LOADS_PER_FRAME;
-
-	for (int y = 0; y < smfMap->numBigTexY && numSquareLoadsLeft > 0; ++y) {
+	for (int y = 0; y < smfMap->numBigTexY; ++y) {
 		float dz = cam->GetPos().z - (y * smfMap->bigSquareSize * SQUARE_SIZE);
 		dz -= (SQUARE_SIZE << 6);
 		dz = std::max(0.0f, float(math::fabs(dz) - (SQUARE_SIZE << 6)));
 
-		for (int x = 0; x < smfMap->numBigTexX && numSquareLoadsLeft > 0; ++x) {
+		for (int x = 0; x < smfMap->numBigTexX; ++x) {
 			GroundSquare* square = &squares[y * smfMap->numBigTexX + x];
 
 			if (square->HasLuaTexture()) {
@@ -376,7 +370,6 @@ void CSMFGroundTextures::DrawUpdate()
 					// `unload` texture (load lowest mip-map) if
 					// the square wasn't visible for 120 vframes
 					LoadSquareTexture(x, y, 3);
-					--numSquareLoadsLeft;
 				}
 				continue;
 			}
@@ -431,24 +424,8 @@ void CSMFGroundTextures::DrawUpdate()
 			if (stretchFactors[y * smfMap->numBigTexX + x] > 16000 && wantedLevel > 0)
 				wantedLevel--;
 
-			const int curLevel = static_cast<int>(square->GetMipLevel());
-
-			if (curLevel != wantedLevel) {
-				// small hysteresis band around the mip thresholds (513/257/129)
-				// so that screenPixels hovering right at a boundary doesn't
-				// reload the same square's texture every other frame
-				static constexpr float MIP_THRESHOLDS[3] = {513.0f, 257.0f, 129.0f};
-				static constexpr float MIP_HYSTERESIS = 24.0f;
-
-				const int thresholdIdx = std::clamp(std::min(curLevel, wantedLevel), 0, 2);
-
-				if (math::fabs(float(screenPixels) - MIP_THRESHOLDS[thresholdIdx]) < MIP_HYSTERESIS)
-					wantedLevel = curLevel;
-			}
-
-			if (curLevel != wantedLevel && numSquareLoadsLeft > 0) {
+			if (square->GetMipLevel() != wantedLevel) {
 				LoadSquareTexture(x, y, wantedLevel);
-				--numSquareLoadsLeft;
 			}
 		}
 	}

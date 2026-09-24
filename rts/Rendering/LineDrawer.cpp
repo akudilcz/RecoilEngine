@@ -7,7 +7,6 @@
 #include <cmath>
 
 #include "Rendering/GlobalRendering.h"
-#include "Rendering/GL/RenderBuffers.h"
 #include "Game/UI/CommandColors.h"
 
 CLineDrawer lineDrawer;
@@ -23,8 +22,8 @@ CLineDrawer::CLineDrawer()
 	, lastColor(NULL)
 	, stippleTimer(0.0f)
 {
-	lineVerts.reserve(256);
-	stippledVerts.reserve(256);
+	lines.reserve(32);
+	stippled.reserve(32);
 }
 
 
@@ -52,40 +51,43 @@ void CLineDrawer::SetupLineStipple()
 
 void CLineDrawer::DrawAll()
 {
-	if (lineVerts.empty() && stippledVerts.empty())
+	if (lines.empty() && stippled.empty())
 		return;
+	
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_COLOR_ARRAY);
 
 	glPushAttrib(GL_ENABLE_BIT);
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_LINE_STIPPLE);
 
-	auto& rb = RenderBuffer::GetTypedRenderBuffer<VA_TYPE_C>();
-	auto& shader = rb.GetShader();
-
-	if (!lineVerts.empty()) {
-		rb.AddVertices(lineVerts);
-
-		shader.Enable();
-		rb.DrawArrays(GL_LINES);
-		shader.Disable();
+	for (int i = 0; i<lines.size(); ++i) {
+		int size = lines[i].colors.size();
+		if(size > 0) {
+			glColorPointer(4, GL_FLOAT, 0, &lines[i].colors[0]);
+			glVertexPointer(3, GL_FLOAT, 0, &lines[i].verts[0]);
+			glDrawArrays(lines[i].type, 0, size/4);
+		}
 	}
 
-	if (!stippledVerts.empty()) {
+	if (!stippled.empty()) {
 		glEnable(GL_LINE_STIPPLE);
-
-		rb.AddVertices(stippledVerts);
-
-		shader.Enable();
-		rb.DrawArrays(GL_LINES);
-		shader.Disable();
-
+		for (int i = 0; i<stippled.size(); ++i) {
+			int size = stippled[i].colors.size();
+			if(size > 0) {
+				glColorPointer(4, GL_FLOAT, 0, &stippled[i].colors[0]);
+				glVertexPointer(3, GL_FLOAT, 0, &stippled[i].verts[0]);
+				glDrawArrays(stippled[i].type, 0, size/4);
+			}
+		}
 		glDisable(GL_LINE_STIPPLE);
 	}
 
+	glDisableClientState(GL_COLOR_ARRAY);
+	glDisableClientState(GL_VERTEX_ARRAY);
 	glPopAttrib();
 
-	// keep capacity, only drop the contents
-	lineVerts.clear();
-	stippledVerts.clear();
+	lines.clear();
+	stippled.clear();
 }

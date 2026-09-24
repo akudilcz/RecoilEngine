@@ -117,15 +117,13 @@ bool QTPFS::PathCache::MarkDeadPaths(const SRectangle& r, const NodeLayer& nodeL
 
 		// if (registry.any_of<PathIsDirty, PathSearchRef>(entity)) { continue; }
 
-		IPath* path = &pathView.get<IPath>(entity);
-
-		// cheap field checks first to avoid the registry lookup below for
-		// the common case of a path belonging to a different layer/type.
-		if (path->GetPathType() != pathType) { continue; }
-		if (path->GetOwner() == nullptr) { continue; }
-
 		// path hasn't been built yet.
 		if (registry.any_of<PathIsTemp>(entity)) { continue; }
+
+		IPath* path = &pathView.get<IPath>(entity);
+
+		if (path->GetOwner() == nullptr) { continue; }
+		if (path->GetPathType() != pathType) { continue; }
 
 		// LOG("%s: %x is processing", __func__, (int)entity);
 

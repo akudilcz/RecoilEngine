@@ -111,16 +111,6 @@ CGroundDecalHandlerData::CGroundDecalHandlerData()
 void CGroundDecalHandlerData::PostLoad()
 {
 	decalsUpdateList.SetNeedUpdateAll();
-
-	// decalOwnerUnits is a rendering-only cache and is not creg-serialized;
-	// rebuild it from decalOwners (which is) after a load.
-	decalOwnerUnits.clear();
-	for (const auto& [owner, _] : decalOwners) {
-		decalOwnerUnits.emplace(owner,
-			std::holds_alternative<const CSolidObject*>(owner) ?
-				dynamic_cast<const CUnit*>(std::get<const CSolidObject*>(owner)) :
-				nullptr);
-	}
 }
 
 CGroundDecalHandler::CGroundDecalHandler()
@@ -946,9 +936,6 @@ void CGroundDecalHandler::MoveSolidObject(const CSolidObject* object, const floa
 	decalsUpdateList.EmplaceBackUpdate();
 	idToPos[decal.info.id] = decals.size() - 1;
 	decalOwners[object] = decals.size() - 1;
-	// dynamic_cast once here at insertion time, cached for the lifetime of the
-	// owner instead of being redone every draw/sim frame
-	decalOwnerUnits[object] = dynamic_cast<const CUnit*>(object);
 }
 
 void CGroundDecalHandler::RemoveSolidObject(const CSolidObject* object, const GhostSolidObject* gb)
@@ -964,12 +951,10 @@ void CGroundDecalHandler::RemoveSolidObject(const CSolidObject* object, const Gh
 
 	const auto pos = doIt->second;
 	decalOwners.erase(doIt);
-	decalOwnerUnits.erase(object);
 
 	if (gb) {
-		// gb is the new owner; ghosts are never units
+		// gb is the new owner
 		decalOwners.emplace(gb, pos);
-		decalOwnerUnits.emplace(gb, nullptr);
 		return;
 	}
 
@@ -1014,7 +999,6 @@ void CGroundDecalHandler::GhostDestroyed(const GhostSolidObject* gb) {
 	decal.alpha = 0.0f;
 	decalsUpdateList.SetUpdate(doIt->second);
 	decalOwners.erase(doIt);
-	decalOwnerUnits.erase(gb);
 }
 
 uint32_t CGroundDecalHandler::CreateLuaDecal()
@@ -1241,7 +1225,6 @@ void CGroundDecalHandler::SetUnitLeaveTracks(CUnit* unit, bool leaveTracks)
 			auto& mm = unitMinMaxHeights[unit->id];
 
 			decalOwners.erase(it); // restart with new decal next time
-			decalOwnerUnits.erase(unit);
 			mm = {};
 		}
 	}
@@ -1293,7 +1276,6 @@ void CGroundDecalHandler::AddTrack(const CUnit* unit, const float3& newPos, bool
 
 	if (!CanReceiveTracks(decalPos) || (unit->IsInWater() && !unit->IsOnGround())) {
 		decalOwners.erase(unit); // restart with new decal next time
-		decalOwnerUnits.erase(unit);
 		mm = {};
 		return;
 	}
@@ -1349,7 +1331,6 @@ void CGroundDecalHandler::AddTrack(const CUnit* unit, const float3& newPos, bool
 		mm = {};
 
 		decalOwners[unit] = decals.size() - 1;
-		decalOwnerUnits[unit] = unit;
 		idToPos[decal.info.id] = decals.size() - 1;
 		decalsUpdateList.EmplaceBackUpdate();
 
@@ -1373,7 +1354,6 @@ void CGroundDecalHandler::AddTrack(const CUnit* unit, const float3& newPos, bool
 	// check if the unit is standing still
 	if (oldDecal.createFrameMax + TRACKS_UPDATE_RATE < createFrame) {
 		decalOwners.erase(unit);
-		decalOwnerUnits.erase(unit);
 		mm = {};
 		return;
 	}
@@ -1440,7 +1420,6 @@ void CGroundDecalHandler::AddTrack(const CUnit* unit, const float3& newPos, bool
 
 	// replace the old entry
 	decalOwners[unit] = decals.size() - 1;
-	decalOwnerUnits[unit] = unit;
 
 	idToPos[newDecal.info.id] = decals.size() - 1;
 	decalsUpdateList.EmplaceBackUpdate();
@@ -1495,24 +1474,22 @@ void CGroundDecalHandler::CompactDecalsVector(int frameNum)
 	}
 #endif
 
-	// temporary store the id --> (DecalOwner, cached CUnit*) relationship,
-	// for the convinience to restore decalOwners/decalOwnerUnits correctness,
+	// temporary store the id --> DecalOwner relationship,
+	// for the convinience to restore decalOwners correctness,
 	// after the compaction is complete
-	spring::unordered_map<uint32_t, std::pair<DecalOwner, const CUnit*>> tmpOwnerToId;
+	spring::unordered_map<uint32_t, DecalOwner> tmpOwnerToId;
 
 	// Remove owners of expired items
 	for (const auto& [owner, pos] : decalOwners) {
 		assert(pos < decals.size());
 		if (const auto& decal = decals[pos]; decal.IsValid()) {
 			const uint32_t id = decal.info.id; //can't use bitfield directly below
-			const auto uIt = decalOwnerUnits.find(owner);
-			tmpOwnerToId.emplace(id, std::make_pair(owner, (uIt != decalOwnerUnits.end()) ? uIt->second : nullptr));
+			tmpOwnerToId.emplace(id, owner);
 		}
 	}
 
 	// clean to restore it later
 	decalOwners.clear();
-	decalOwnerUnits.clear();
 
 	// group all expired items towards the end of the vector
 	// Lua items are not considered expired
@@ -1539,9 +1516,7 @@ void CGroundDecalHandler::CompactDecalsVector(int frameNum)
 	}
 
 	// update the new positions of shrunk decals vector
-	for (const auto& [id, ownerAndUnit] : tmpOwnerToId) {
-		const auto& [owner, unit] = ownerAndUnit;
-
+	for (const auto& [id, owner] : tmpOwnerToId) {
 		const auto ipIt = idToPos.find(id);
 		if (ipIt == idToPos.end()) {
 			assert(false);
@@ -1549,7 +1524,6 @@ void CGroundDecalHandler::CompactDecalsVector(int frameNum)
 		}
 
 		decalOwners.emplace(owner, ipIt->second);
-		decalOwnerUnits.emplace(owner, unit);
 	}
 
 
@@ -1583,10 +1557,7 @@ void CGroundDecalHandler::UpdateDecalsVisibility()
 			const auto* so = std::get<const CSolidObject*>(owner);
 			float wantedMult = 1.0f;
 
-			// cached at insertion time (see decalOwnerUnits) to avoid a
-			// dynamic_cast for every owner on every draw frame
-			const auto unitIt = decalOwnerUnits.find(owner);
-			if (const CUnit* unit = (unitIt != decalOwnerUnits.end()) ? unitIt->second : nullptr; unit != nullptr) {
+			if (const CUnit* unit = dynamic_cast<const CUnit*>(so); unit != nullptr) {
 				const bool decalOwnerInCurLOS = ((unit->losStatus[gu->myAllyTeam] &   LOS_INLOS) != 0);
 				const bool decalOwnerInPrvLOS = ((unit->losStatus[gu->myAllyTeam] & LOS_PREVLOS) != 0);
 				const bool isGhostNow = gameSetup->ghostedBuildings && decalOwnerInPrvLOS && !decalOwnerInCurLOS;
@@ -1679,17 +1650,13 @@ void CGroundDecalHandler::GameFramePost(int frameNum)
 	}
 #endif
 	// can't call AddTrack() directly in the loop below as it messes with decalOwners iteration order
-	// reuse a member buffer instead of allocating a new vector every sim frame
-	deferredTrackUpdate.clear();
+	std::vector<const CUnit*> deferredTrackUpdate;
 
 	for (const auto& [owner, _] : decalOwners) {
 		if (!std::holds_alternative<const CSolidObject*>(owner))
 			continue;
 
-		// cached at insertion time (see decalOwnerUnits) to avoid a
-		// dynamic_cast for every owner on every sim frame
-		const auto unitIt = decalOwnerUnits.find(owner);
-		const CUnit* unit = (unitIt != decalOwnerUnits.end()) ? unitIt->second : nullptr;
+		const CUnit* unit = dynamic_cast<const CUnit*>(std::get<const CSolidObject*>(owner));
 		if (unit == nullptr)
 			continue;
 
@@ -1708,11 +1675,9 @@ void CGroundDecalHandler::GameFramePost(int frameNum)
 		AddTrack(unit, unit->pos, true);
 	}
 
-	// CompactDecalsVector() self-gates on frameNum % 300; the previous extra
-	// "% 16" wrapper here made it effectively run only every 1200 frames,
-	// letting dead instances linger far longer than intended in the
-	// instanced draw buffer.
-	CompactDecalsVector(frameNum);
+	if (frameNum % 16 ==  0) {
+		CompactDecalsVector(frameNum);
+	}
 }
 
 void CGroundDecalHandler::SunChanged()

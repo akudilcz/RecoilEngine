@@ -8,12 +8,10 @@
 #include "3DModel.hpp"
 #include "3DModelPiece.hpp"
 #include "IModelParser.h"
-#include "Rendering/GlobalRendering.h"
 #include "Rendering/ModelsDataUploader.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitDef.h"
 #include "Sim/Features/Feature.h"
-#include "System/Log/ILog.h"
 
 #include "System/Misc/TracyDefs.h"
 
@@ -401,101 +399,49 @@ bool S3DModelVAO::AddStaticInstance(const S3DModel* model, uint32_t worldTransfo
 void S3DModelVAO::Submit(GLenum mode, bool bindUnbind)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-
-	// rewind the running write cursor once per frame; within a frame it is
-	// left as-is so successive Submit() calls (one per texture bin per pass)
-	// append after each other instead of re-uploading at offset 0
-	if (globalRendering->drawFrame != submitFrame) {
-		submitFrame = globalRendering->drawFrame;
-		batchedBaseInstance = 0u;
-	}
-
-	if (modelDataToInstance.empty())
-		return;
-
 	static std::vector<SDrawElementsIndirectCommand> submitCmds;
 	submitCmds.clear();
+
+	batchedBaseInstance = 0u;
 
 	static std::vector<SInstanceData> allRenderModelData;
 	allRenderModelData.reserve(INSTANCE_BUFFER_NUM_BATCHED);
 	allRenderModelData.clear();
 
-	// lambda that flushes whatever has been accumulated so far to the current
-	// writeOffset and issues the (multi)draw; used both for the final flush
-	// and for the wrap-around case below
-	const auto flush = [&](uint32_t writeOffset) {
-		if (submitCmds.empty())
-			return;
-
-		instVBO.Bind();
-		instVBO.SetBufferSubData(writeOffset * sizeof(SInstanceData), allRenderModelData.size() * sizeof(SInstanceData), allRenderModelData.data());
-		instVBO.Unbind();
-
-		if (bindUnbind)
-			Bind();
-
-		glMultiDrawElementsIndirect(mode, GL_UNSIGNED_INT, submitCmds.data(), submitCmds.size(), sizeof(SDrawElementsIndirectCommand));
-
-		if (bindUnbind)
-			Unbind();
-
-		submitCmds.clear();
-		allRenderModelData.clear();
-	};
-
-	uint32_t writeOffset = batchedBaseInstance;
-
-	for (auto& [indxCount, renderModelData] : modelDataToInstance) {
-		if (renderModelData.empty())
+	for (const auto& [indxCount, renderModelData] : modelDataToInstance) {
+		if (allRenderModelData.size() + renderModelData.size() >= INSTANCE_BUFFER_NUM_BATCHED)
 			continue;
-
-		if (renderModelData.size() > INSTANCE_BUFFER_NUM_BATCHED) {
-			// a single group can never fit into the batched region on its own;
-			// draw as much of it as fits rather than silently dropping it
-			if (!loggedInstanceOverflow) {
-				LOG_L(L_WARNING, "[S3DModelVAO::%s] instance group of %u exceeds INSTANCE_BUFFER_NUM_BATCHED (%u), truncating", __func__, static_cast<uint32_t>(renderModelData.size()), static_cast<uint32_t>(INSTANCE_BUFFER_NUM_BATCHED));
-				loggedInstanceOverflow = true;
-			}
-		}
-
-		const uint32_t groupCount = static_cast<uint32_t>(std::min(renderModelData.size(), INSTANCE_BUFFER_NUM_BATCHED));
-
-		if (writeOffset + allRenderModelData.size() + groupCount > INSTANCE_BUFFER_NUM_BATCHED) {
-			// this frame's cumulative instance count overflows the batched
-			// capacity; flush what has been accumulated and wrap back to the
-			// start of the buffer (stalls only on this call, not every call)
-			flush(writeOffset);
-			writeOffset = 0u;
-
-			if (!loggedInstanceOverflow) {
-				LOG_L(L_WARNING, "[S3DModelVAO::%s] instance buffer wrapped mid-frame, some overlap between passes is possible", __func__);
-				loggedInstanceOverflow = true;
-			}
-		}
 
 		SDrawElementsIndirectCommand scmd{
 			indxCount.count,
-			groupCount,
+			static_cast<uint32_t>(renderModelData.size()),
 			indxCount.index,
 			0u,
-			writeOffset + static_cast<uint32_t>(allRenderModelData.size())
+			batchedBaseInstance
 		};
 
 		submitCmds.emplace_back(scmd);
 
-		allRenderModelData.insert(allRenderModelData.end(), renderModelData.cbegin(), renderModelData.cbegin() + groupCount);
+		allRenderModelData.insert(allRenderModelData.end(), renderModelData.cbegin(), renderModelData.cend());
+		batchedBaseInstance += renderModelData.size();
 	}
 
-	const uint32_t finalCount = static_cast<uint32_t>(allRenderModelData.size());
-	flush(writeOffset);
-	batchedBaseInstance = writeOffset + finalCount;
+	if (submitCmds.empty())
+		return;
 
-	// keep the per-model vectors (and their allocated capacity) alive across
-	// frames instead of erasing the map entries; only their contents are
-	// cleared, so the next frame's EmplaceInstance() calls reuse the storage
-	// instead of reallocating every model bucket every frame
-	for (auto& [indxCount, renderModelData] : modelDataToInstance)
-		renderModelData.clear();
+	instVBO.Bind();
+	instVBO.SetBufferSubData(allRenderModelData);
+	instVBO.Unbind();
+
+	if (bindUnbind)
+		Bind();
+
+	glMultiDrawElementsIndirect(mode, GL_UNSIGNED_INT, submitCmds.data(), submitCmds.size(), sizeof(SDrawElementsIndirectCommand));
+
+	if (bindUnbind)
+		Unbind();
+
+	modelDataToInstance.clear();
 }
 
 template<typename TObj>

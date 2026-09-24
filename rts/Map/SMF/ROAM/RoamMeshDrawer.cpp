@@ -219,12 +219,8 @@ void CRoamMeshDrawer::Update()
 	CCamera* playerCamera = CCameraHandler::GetCamera(CCamera::CAMTYPE_PLAYER);
 	float3 playerCameraPosition = playerCamera->GetPos();
 	float totalCameraDistanceRatioInv = 0.0f;
-	auto& patchesToTesselate = this->patchesToTesselate[shadowPass];
-	patchesToTesselate.resize(numPatches);
+	std::vector<bool> patchesToTesselate(numPatches);
 	std::fill(patchesToTesselate.begin(), patchesToTesselate.end(), gldUpdated);
-
-	auto& dirtyPatchIndices = this->dirtyPatchIndices[shadowPass];
-	dirtyPatchIndices.clear();
 
 #if TESSELATION_DEBUG
 	if (tesselMesh)
@@ -274,11 +270,8 @@ void CRoamMeshDrawer::Update()
 			if (isVisibleNow) {
 				numPatchesVisible++;
 				// if it was dirty(had heightmap change) then recompute variances.
-				// (ComputeVariance() only touches this patch's own state and
-				// reads the shared read-only heightmap, so it is deferred and
-				// batched below to run across worker threads)
 				if (p.IsDirty()) {
-					dirtyPatchIndices.push_back(i);
+					p.ComputeVariance();
 					// here we can do incremental retesselation?
 					patchesToTesselate[i] = true;
 				}
@@ -323,16 +316,6 @@ void CRoamMeshDrawer::Update()
 				}
 			#endif
 		}
-	}
-
-	if (!dirtyPatchIndices.empty()) {
-		//SCOPED_TIMER("ROAM::ComputeVariance");
-		// safe to run in parallel: ComputeVariance() only writes into the
-		// per-patch varianceTree/isDirty state of the patch it is called on,
-		// and only reads shared (read-only) heightmap data; no GL calls
-		for_mt(0, static_cast<int>(dirtyPatchIndices.size()), [&patches, &dirtyPatchIndices](const int i) {
-			patches[dirtyPatchIndices[i]].ComputeVariance();
-		});
 	}
 
 	int actualTesselations = 0;

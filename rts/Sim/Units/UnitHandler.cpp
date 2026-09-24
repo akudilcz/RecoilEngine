@@ -1,6 +1,5 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
-#include <algorithm>
 #include <cassert>
 
 #include "UnitHandler.h"
@@ -292,54 +291,10 @@ bool CUnitHandler::QueueDeleteUnit(CUnit* unit)
 void CUnitHandler::DeleteUnits()
 {
 	ZoneScopedC(tracy::Color::Goldenrod);
-
-	if (unitsToBeRemoved.empty())
-		return;
-
-	// DeleteUnit() used to look up (std::find) and erase() its unit from
-	// activeUnits individually, i.e. an O(n) scan-and-shift per dying unit.
-	// Run the per-unit side effects below in the same (LIFO) order as
-	// before -- that ordering matters for the RenderUnitDestroyed callin
-	// and team bookkeeping -- but defer unlinking them from activeUnits to
-	// a single order-preserving compaction pass once all of them are gone,
-	// which touches the (potentially large) activeUnits vector exactly once
-	// per frame instead of once per dead unit.
-	static std::vector<CUnit*> deletedUnits;
-	deletedUnits.clear();
-	deletedUnits.reserve(unitsToBeRemoved.size());
-
 	while (!unitsToBeRemoved.empty()) {
-		CUnit* delUnit = unitsToBeRemoved.back();
+		DeleteUnit(unitsToBeRemoved.back());
 		unitsToBeRemoved.pop_back();
-
-		deletedUnits.push_back(delUnit);
-		DeleteUnit(delUnit);
 	}
-
-	// deletedUnits holds only stale (already-freed) pointer *values*; they
-	// are never dereferenced below, only compared for identity against the
-	// (still valid) pointers still in activeUnits
-	std::sort(deletedUnits.begin(), deletedUnits.end());
-
-	size_t writeIdx = 0;
-	size_t numErasedBeforeCursor = 0;
-
-	for (size_t readIdx = 0; readIdx < activeUnits.size(); ++readIdx) {
-		CUnit* u = activeUnits[readIdx];
-
-		if (std::binary_search(deletedUnits.begin(), deletedUnits.end(), u)) {
-			// equivalent to decrementing activeSlowUpdateUnit once for
-			// every removed unit whose (pre-removal) index was below it,
-			// same as the old per-unit erase() did one at a time
-			numErasedBeforeCursor += (readIdx < activeSlowUpdateUnit);
-			continue;
-		}
-
-		activeUnits[writeIdx++] = u;
-	}
-
-	activeUnits.resize(writeIdx);
-	activeSlowUpdateUnit -= numErasedBeforeCursor;
 }
 
 void CUnitHandler::DeleteUnit(CUnit* delUnit)
@@ -350,13 +305,22 @@ void CUnitHandler::DeleteUnit(CUnit* delUnit)
 	// we want to call RenderUnitDestroyed while the unit is still valid
 	eventHandler.RenderUnitDestroyed(delUnit);
 
+	const auto it = std::find(activeUnits.begin(), activeUnits.end(), delUnit);
+
+	if (it == activeUnits.end()) {
+		assert(false);
+		return;
+	}
+
 	const int delUnitTeam = delUnit->team;
 	const int delUnitType = delUnit->unitDef->id;
 
 	teamHandler.Team(delUnitTeam)->RemoveUnit(delUnit, CTeam::RemoveDied);
 
-	// unlinking delUnit from activeUnits (and adjusting activeSlowUpdateUnit)
-	// is now handled by DeleteUnits() as a single batched pass, see there
+	if (activeSlowUpdateUnit > std::distance(activeUnits.begin(), it))
+		--activeSlowUpdateUnit;
+
+	activeUnits.erase(it);
 
 	spring::VectorErase(GetUnitsByTeamAndDef(delUnitTeam,           0), delUnit);
 	spring::VectorErase(GetUnitsByTeamAndDef(delUnitTeam, delUnitType), delUnit);
@@ -387,42 +351,9 @@ void CUnitHandler::UpdateUnitMoveTypes()
 void CUnitHandler::UpdateUnitLosStates()
 {
 	ZoneScopedC(tracy::Color::Goldenrod);
-
-	const int numAllyTeams = teamHandler.ActiveAllyTeams();
-
-	// CalcLosStatus() only reads state (LosHandler's per-allyteam los maps
-	// and the unit's own losStatus) and has no side effects, so it is safe
-	// to compute in parallel into a scratch buffer. SetLosStatus() (which
-	// fires the UnitEntered/LeftLos/Radar callins) must still run serially,
-	// in the same per-unit/per-allyteam order as before, so callin
-	// ordering is unaffected. A masked (unit, allyteam) pair is skipped in
-	// both the scratch computation and the apply pass -- matching
-	// UpdateLosStatus()'s own early-out, which never called CalcLosStatus
-	// or SetLosStatus for it either.
-	constexpr unsigned short LOS_STATUS_MASKED = 0xffff;
-
-	static std::vector<unsigned short> newLosStatus;
-	newLosStatus.clear();
-	newLosStatus.resize(activeUnits.size() * numAllyTeams);
-
-	for_mt(0, activeUnits.size(), [&](const int i) {
-		CUnit* unit = activeUnits[i];
-		unsigned short* dst = &newLosStatus[i * numAllyTeams];
-
-		for (int at = 0; at < numAllyTeams; ++at) {
-			dst[at] = unit->IsLosStatusMasked(at) ? LOS_STATUS_MASKED : unit->CalcLosStatus(at);
-		}
-	});
-
-	for (size_t i = 0; i < activeUnits.size(); ++i) {
-		CUnit* unit = activeUnits[i];
-		const unsigned short* src = &newLosStatus[i * numAllyTeams];
-
-		for (int at = 0; at < numAllyTeams; ++at) {
-			if (src[at] == LOS_STATUS_MASKED)
-				continue;
-
-			unit->SetLosStatus(at, src[at]);
+	for (CUnit* unit: activeUnits) {
+		for (int at = 0; at < teamHandler.ActiveAllyTeams(); ++at) {
+			unit->UpdateLosStatus(at);
 		}
 	}
 }
@@ -515,9 +446,9 @@ void CUnitHandler::UpdatePreFrame()
 	SCOPED_TIMER("Sim::Unit::UpdatePreFrame");
 	inUpdateCall = true;
 
-	for_mt(0, activeUnits.size(), [this](const int i) {
-		activeUnits[i]->UpdatePrevFrameTransform();
-	});
+	for (CUnit* unit : activeUnits) {
+		unit->UpdatePrevFrameTransform();
+	}
 
 	inUpdateCall = false;
 }

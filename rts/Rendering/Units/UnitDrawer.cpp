@@ -1912,7 +1912,9 @@ void CUnitDrawerGL4::DrawObjectsShadow(int modelType) const
 
 		smv.Submit(GL_TRIANGLES, false);
 
-		DrawUnitModelsBeingBuiltShadow(beingBuilt);
+		for (auto* o : beingBuilt) {
+			DrawUnitModelBeingBuiltShadow(o, false);
+		}
 
 		CModelDrawerHelper::modelDrawerHelpers[modelType]->UnbindShadowTex();
 	}
@@ -1959,7 +1961,9 @@ void CUnitDrawerGL4::DrawOpaqueObjects(int modelType, bool drawReflection, bool 
 
 		smv.Submit(GL_TRIANGLES, false);
 
-		DrawUnitModelsBeingBuiltOpaque(beingBuilt);
+		for (auto* o : beingBuilt) {
+			DrawUnitModelBeingBuiltOpaque(o, false);
+		}
 	}
 
 	smv.Unbind();
@@ -2214,19 +2218,25 @@ void CUnitDrawerGL4::DrawOpaqueAIUnit(const CUnitDrawerData::TempDrawUnit& unit)
 	smv.SubmitImmediately(mdl, static_cast<uint16_t>(unit.team));
 }
 
-// Batched replacement for the old per-unit DrawUnitModelBeingBuiltShadow(): construction
-// clip planes now only depend on each unit's own buildProgress/model-height, which are
-// snapshotted into ModelUniformData (see CModelDrawerDataBase::UpdateObjectUniforms) and
-// read back per-instance in ModelVertProgGL4.glsl/ShadowGenVertProgGL4.glsl. This lets us
-// submit every being-built unit of a bin in a single draw call per build stage instead of
-// up to 3 SubmitImmediately() calls (plus glPushAttrib()/polygon-mode toggles) per unit.
-void CUnitDrawerGL4::DrawUnitModelsBeingBuiltShadow(const std::vector<const CUnit*>& units) const
+void CUnitDrawerGL4::DrawUnitModelBeingBuiltShadow(const CUnit* unit, bool noLuaCall) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (units.empty())
-		return;
-
 	auto& smv = S3DModelVAO::GetInstance();
+
+	const float3 stageBounds = { 0.0f, unit->model->CalcDrawHeight(), unit->buildProgress };
+
+	const float4 upperPlanes[] = {
+		{0.0f, -1.0f, 0.0f,  stageBounds.x + stageBounds.y * (stageBounds.z * 3.0f       )},
+		{0.0f, -1.0f, 0.0f,  stageBounds.x + stageBounds.y * (stageBounds.z * 3.0f - 1.0f)},
+		{0.0f, -1.0f, 0.0f,  stageBounds.x + stageBounds.y * (stageBounds.z * 3.0f - 2.0f)},
+		{0.0f,  0.0f, 0.0f,                                                          0.0f },
+	};
+	const float4 lowerPlanes[] = {
+		{0.0f,  1.0f, 0.0f, -stageBounds.x - stageBounds.y * (stageBounds.z * 10.0f - 9.0f)},
+		{0.0f,  1.0f, 0.0f, -stageBounds.x - stageBounds.y * (stageBounds.z * 3.0f  - 2.0f)},
+		{0.0f,  1.0f, 0.0f,                                                           0.0f },
+		{0.0f,  0.0f, 0.0f,                                                           0.0f },
+	};
 
 	Shader::IProgramObject* po = shadowHandler.GetShadowGenProg(CShadowHandler::SHADOWGEN_PROGRAM_MODEL_GL4);
 	assert(po);
@@ -2237,77 +2247,89 @@ void CUnitDrawerGL4::DrawUnitModelsBeingBuiltShadow(const std::vector<const CUni
 	glEnable(GL_CLIP_DISTANCE0);
 	glEnable(GL_CLIP_DISTANCE1);
 
+	const auto SetClipPlane = [po](uint8_t idx, const float4& cp) {
+		switch (idx)
+		{
+		case 0: //upper construction clip plane
+			po->SetUniform("clipPlane0", cp.x, cp.y, cp.z, cp.w);
+			break;
+		case 1: //lower construction clip plane
+			po->SetUniform("clipPlane1", cp.x, cp.y, cp.z, cp.w);
+			break;
+		default:
+			assert(false);
+			break;
+		}
+	};
+
 	{
 		// wireframe, unconditional
-		po->SetUniform("buildStage", static_cast<int>(BUILDSTAGE_WIRE));
+		SetClipPlane(0, upperPlanes[BUILDSTAGE_WIRE]);
+		SetClipPlane(1, lowerPlanes[BUILDSTAGE_WIRE]);
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		for (auto* u : units)
-			smv.AddToSubmission(u);
-		smv.Submit(GL_TRIANGLES, false);
+		smv.SubmitImmediately(unit, GL_TRIANGLES);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	}
 
-	{
-		// flat-colored; units below 1/3 built are clipped away entirely in-shader
-		po->SetUniform("buildStage", static_cast<int>(BUILDSTAGE_FLAT));
+	if (stageBounds.z > 1.0f / 3.0f) {
+		// flat-colored, conditional
+		SetClipPlane(0, upperPlanes[BUILDSTAGE_FLAT]);
+		SetClipPlane(1, lowerPlanes[BUILDSTAGE_FLAT]);
 
-		for (auto* u : units)
-			smv.AddToSubmission(u);
-		smv.Submit(GL_TRIANGLES, false);
+		smv.SubmitImmediately(unit, GL_TRIANGLES);
 	}
+
+	SetClipPlane(0, float4{ 0.0f, 0.0f, 0.0f, 1.0f }); //default
+	SetClipPlane(1, float4{ 0.0f, 0.0f, 0.0f, 1.0f }); //default;
 
 	glDisable(GL_CLIP_DISTANCE1);
-
-	{
-		// fully-shaded; units below 2/3 built are clipped away entirely in-shader.
-		// CLIP_DISTANCE1 is left disabled here, matching the legacy per-unit code
-		// which drew this stage fully unclipped
-		po->SetUniform("buildStage", static_cast<int>(BUILDSTAGE_FILL));
-
-		for (auto* u : units)
-			smv.AddToSubmission(u);
-		smv.Submit(GL_TRIANGLES, false);
-	}
-
-	po->SetUniform("buildStage", -1);
 	glDisable(GL_CLIP_DISTANCE0);
+
+	if (stageBounds.z > 2.0f / 3.0f) {
+		// fully-shaded, conditional
+		smv.SubmitImmediately(unit, GL_TRIANGLES);
+	}
 
 	glPopAttrib();
 }
 
-// Batched replacement for the old per-unit DrawUnitModelBeingBuiltOpaque(). Construction
-// clip planes are handled the same way as in DrawUnitModelsBeingBuiltShadow() above. The
-// nanoColor tint still varies per-unit (unitDef->nanoColor or team color), so units are
-// grouped by their resolved color and each group gets its own SetNanoColor()+Submit() for
-// the wire/flat stages; the fully-shaded stage never tints (alpha 0) and so needs no
-// grouping at all, i.e. always exactly one Submit.
-void CUnitDrawerGL4::DrawUnitModelsBeingBuiltOpaque(const std::vector<const CUnit*>& units) const
+void CUnitDrawerGL4::DrawUnitModelBeingBuiltOpaque(const CUnit* unit, bool noLuaCall) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	if (units.empty())
-		return;
-
 	auto& smv = S3DModelVAO::GetInstance();
+
+	const    CTeam* team = teamHandler.Team(unit->team);
+	const   SColor  color = team->color;
 
 	const float wireColorMult = std::fabs(128.0f - ((gs->frameNum * 4) & 255)) / 255.0f + 0.5f;
 	const float flatColorMult = 1.5f - wireColorMult;
 
-	static std::vector<std::pair<float3, std::vector<const CUnit*>>> colorGroups;
-	colorGroups.clear();
+	const float3 frameColors[2] = { unit->unitDef->nanoColor, {color.r / 255.0f, color.g / 255.0f, color.b / 255.0f} };
+	const float3 stageColors[2] = { frameColors[globalRendering->teamNanospray], frameColors[globalRendering->teamNanospray] };
 
-	for (auto* u : units) {
-		const CTeam* team = teamHandler.Team(u->team);
-		const SColor color = team->color;
-		const float3 frameColors[2] = { u->unitDef->nanoColor, {color.r / 255.0f, color.g / 255.0f, color.b / 255.0f} };
-		const float3& unitColor = frameColors[globalRendering->teamNanospray];
 
-		const auto it = std::find_if(colorGroups.begin(), colorGroups.end(), [&](const auto& g) { return g.first == unitColor; });
-		if (it == colorGroups.end())
-			colorGroups.emplace_back(unitColor, std::vector<const CUnit*>{ u });
-		else
-			it->second.push_back(u);
-	}
+	const float3 stageBounds = { 0.0f, unit->model->CalcDrawHeight(), unit->buildProgress };
+
+	// draw-height defaults to maxs.y - mins.y, but can be overridden for non-3DO models
+	// the default value derives from the model vertices and makes more sense to use here
+	//
+	// Both clip planes move up. Clip plane 0 is the upper bound of the model,
+	// clip plane 1 is the lower bound. In other words, clip plane 0 makes the
+	// wireframe/flat color/texture appear, and clip plane 1 then erases the
+	// wireframe/flat color later on.
+	const float4 upperPlanes[] = {
+		{0.0f, -1.0f, 0.0f,  stageBounds.x + stageBounds.y * (stageBounds.z * 3.0f       )},
+		{0.0f, -1.0f, 0.0f,  stageBounds.x + stageBounds.y * (stageBounds.z * 3.0f - 1.0f)},
+		{0.0f, -1.0f, 0.0f,  stageBounds.x + stageBounds.y * (stageBounds.z * 3.0f - 2.0f)},
+		{0.0f,  0.0f, 0.0f,                                                          0.0f },
+	};
+	const float4 lowerPlanes[] = {
+		{0.0f,  1.0f, 0.0f, -stageBounds.x - stageBounds.y * (stageBounds.z * 10.0f - 9.0f)},
+		{0.0f,  1.0f, 0.0f, -stageBounds.x - stageBounds.y * (stageBounds.z *  3.0f - 2.0f)},
+		{0.0f,  1.0f, 0.0f,                                  (                        0.0f)},
+		{0.0f,  0.0f, 0.0f,                                                           0.0f },
+	};
 
 	glPushAttrib(GL_POLYGON_BIT);
 
@@ -2316,51 +2338,41 @@ void CUnitDrawerGL4::DrawUnitModelsBeingBuiltOpaque(const std::vector<const CUni
 
 	{
 		// wireframe, unconditional
-		modelDrawerState->SetBuildStage(static_cast<int>(BUILDSTAGE_WIRE));
+		SetNanoColor(float4(stageColors[0] * wireColorMult, 1.0f));
+		modelDrawerState->SetClipPlane(0, upperPlanes[BUILDSTAGE_WIRE]);
+		modelDrawerState->SetClipPlane(1, lowerPlanes[BUILDSTAGE_WIRE]);
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		for (const auto& [unitColor, group] : colorGroups) {
-			SetNanoColor(float4(unitColor * wireColorMult, 1.0f));
-			for (auto* u : group)
-				smv.AddToSubmission(u);
-			smv.Submit(GL_TRIANGLES, false);
-		}
+		smv.SubmitImmediately(unit, GL_TRIANGLES);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	}
 
-	{
-		// flat-colored; units below 1/3 built are clipped away entirely in-shader
-		modelDrawerState->SetBuildStage(static_cast<int>(BUILDSTAGE_FLAT));
+	if (stageBounds.z > 1.0f / 3.0f) {
+		// flat-colored, conditional
+		SetNanoColor(float4(stageColors[1] * flatColorMult, 1.0f));
+		modelDrawerState->SetClipPlane(0, upperPlanes[BUILDSTAGE_FLAT]);
+		modelDrawerState->SetClipPlane(1, lowerPlanes[BUILDSTAGE_FLAT]);
 
-		for (const auto& [unitColor, group] : colorGroups) {
-			SetNanoColor(float4(unitColor * flatColorMult, 1.0f));
-			for (auto* u : group)
-				smv.AddToSubmission(u);
-			smv.Submit(GL_TRIANGLES, false);
-		}
+		smv.SubmitImmediately(unit, GL_TRIANGLES);
 	}
 
 	modelDrawerState->SetClipPlane(1); //default;
 	glDisable(GL_CLIP_DISTANCE1);
 
-	{
-		// fully-shaded; units below 2/3 built are clipped away entirely in-shader, the
-		// rest are clipped against the flat stage's upper bound (see the shader), same
-		// as the legacy per-unit code. No color grouping needed: alpha 0 disables tinting
+	if (stageBounds.z > 2.0f / 3.0f) {
+		// fully-shaded, conditional
 		glPolygonOffset(1.0f, 1.0f);
 		glEnable(GL_POLYGON_OFFSET_FILL);
 		SetNanoColor(float4(1.0f, 1.0f, 1.0f, 0.0f));
-		modelDrawerState->SetBuildStage(static_cast<int>(BUILDSTAGE_FILL));
+		modelDrawerState->SetClipPlane(0, upperPlanes[BUILDSTAGE_FLAT]);
 
-		for (auto* u : units)
-			smv.AddToSubmission(u);
-		smv.Submit(GL_TRIANGLES, false);
+		smv.SubmitImmediately(unit, GL_TRIANGLES);
 
 		glDisable(GL_POLYGON_OFFSET_FILL);
 	}
 
 	SetNanoColor(float4(1.0f, 1.0f, 1.0f, 0.0f)); // turn off in any case
-	modelDrawerState->SetBuildStage(-1);
+	modelDrawerState->SetClipPlane(0); //default
 	glDisable(GL_CLIP_DISTANCE0);
 
 	glPopAttrib();

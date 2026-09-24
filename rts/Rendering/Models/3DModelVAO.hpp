@@ -123,17 +123,7 @@ private:
 private:
 	bool safeToDeleteVectors = false;
 
-	// running write cursor into the batched region of instVBO; persists across
-	// Submit() calls (one per texture bin per pass) within the same frame so
-	// each call appends after the previous one instead of re-uploading at
-	// offset 0, which forced the driver to stall/rename the buffer every call.
-	// Rewound to 0 once at the start of each frame (see Submit()), and wrapped
-	// back to 0 if a frame's cumulative instance count would overflow the
-	// batched capacity.
 	uint32_t batchedBaseInstance   = 0;
-	uint32_t submitFrame           = ~0u;
-	bool loggedInstanceOverflow    = false;
-
 	uint32_t immediateBaseInstance = 0; //note relative index
 
 	size_t vertUploadIndex = 0;

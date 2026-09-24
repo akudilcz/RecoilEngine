@@ -2,7 +2,6 @@
 
 #include "CommandDrawer.h"
 #include "LineDrawer.h"
-#include "Game/Camera.h"
 #include "Game/GameHelper.h"
 #include "Game/UI/CommandColors.h"
 #include "Game/WaitCommandsAI.h"
@@ -653,103 +652,149 @@ void CommandDrawer::DrawDefaultCommand(const Command& c, const CUnit* owner) con
 	lineDrawer.DrawLineAndIcon(dd->cmdIconID, unit->GetObjDrawErrorPos(owner->allyteam), dd->color);
 }
 
-void CommandDrawer::DrawQuedBuildingSquares(const std::vector<const CBuilderCAI*>& myBuilderCAIs, const std::vector<const CBuilderCAI*>& allyBuilderCAIs) const
+void CommandDrawer::DrawQuedBuildingSquares(const CBuilderCAI* cai) const
 {
-	struct QueuedBuild {
-		float3 pos;
-		float xsize;
-		float zsize;
-		bool underwater;
-		SColor color;
-	};
+	const CCommandQueue& commandQue = cai->commandQue;
+	const auto& buildOptions = cai->buildOptions;
 
-	// persistent across calls, only cleared (not freed) each frame
-	static std::vector<QueuedBuild> builds;
-	builds.clear();
+	unsigned int  buildCommands = 0;
+	unsigned int uwaterCommands = 0;
 
-	const auto parseInto = [&builds](const std::vector<const CBuilderCAI*>& cais, const SColor& color) {
-		for (const CBuilderCAI* cai : cais) {
-			const CCommandQueue& commandQue = cai->commandQue;
-			const auto& buildOptions = cai->buildOptions;
-
-			for (const Command& c: commandQue) {
-				if (buildOptions.find(c.GetID()) == buildOptions.end())
-					continue;
-
-				BuildInfo bi;
-
-				if (!bi.Parse(c))
-					continue;
-
-				bi.pos = CGameHelper::Pos2BuildPos(bi, false);
-
-				const float xsize = bi.GetXSize() * (SQUARE_SIZE >> 1);
-				const float zsize = bi.GetZSize() * (SQUARE_SIZE >> 1);
-				const float radius = math::sqrt(xsize * xsize + zsize * zsize);
-
-				// cull build positions that are not visible
-				if (!camera->InView(bi.pos, radius))
-					continue;
-
-				builds.push_back({ bi.pos, xsize, zsize, (bi.pos.y < 0.0f), color });
-			}
-		}
-	};
-
-	parseInto(myBuilderCAIs, SColor(cmdColors.buildBox));
-	parseInto(allyBuilderCAIs, SColor(cmdColors.allyBuildBox));
-
-	if (builds.empty())
-		return;
-
-	auto& rb = RenderBuffer::GetTypedRenderBuffer<VA_TYPE_C>();
-	using IndcType = uint32_t;
-
-	static constexpr SColor capColor    (0.0f, 0.5f, 1.0f, 1.0f); // same as end color of lines
-	static constexpr SColor lineColorTop(0.0f, 0.0f, 1.0f, 0.5f); // start color
-	static constexpr SColor lineColorBot(0.0f, 0.5f, 1.0f, 1.0f); // end color
-
-	const auto addLine = [&rb](const float3& p0, const SColor& c0, const float3& p1, const SColor& c1) {
-		const IndcType base = rb.GetBaseVertex();
-
-		rb.AddVertex({ p0, c0 });
-		rb.AddVertex({ p1, c1 });
-		rb.AddIndices(std::vector<IndcType>{ base, static_cast<IndcType>(base + 1) });
-	};
-
-	for (const QueuedBuild& b : builds) {
-		const float x1 = b.pos.x - b.xsize;
-		const float z1 = b.pos.z - b.zsize;
-		const float x2 = b.pos.x + b.xsize;
-		const float z2 = b.pos.z + b.zsize;
-		const float h = b.pos.y + 1.0f;
-
-		rb.AddQuadLines(
-			VA_TYPE_C{ float3(x1, h, z1), b.color },
-			VA_TYPE_C{ float3(x1, h, z2), b.color },
-			VA_TYPE_C{ float3(x2, h, z2), b.color },
-			VA_TYPE_C{ float3(x2, h, z1), b.color }
-		);
-
-		if (!b.underwater)
+	for (const Command& c: commandQue) {
+		if (buildOptions.find(c.GetID()) == buildOptions.end())
 			continue;
 
-		rb.AddQuadLines(
-			VA_TYPE_C{ float3(x1, 0.0f, z1), capColor },
-			VA_TYPE_C{ float3(x1, 0.0f, z2), capColor },
-			VA_TYPE_C{ float3(x2, 0.0f, z2), capColor },
-			VA_TYPE_C{ float3(x2, 0.0f, z1), capColor }
-		);
+		BuildInfo bi;
 
-		addLine(float3(x1, b.pos.y, z1), lineColorTop, float3(x1, 0.0f, z1), lineColorBot);
-		addLine(float3(x2, b.pos.y, z1), lineColorTop, float3(x2, 0.0f, z1), lineColorBot);
-		addLine(float3(x2, b.pos.y, z2), lineColorTop, float3(x2, 0.0f, z2), lineColorBot);
-		addLine(float3(x1, b.pos.y, z2), lineColorTop, float3(x1, 0.0f, z2), lineColorBot);
+		if (!bi.Parse(c))
+			continue;
+
+		bi.pos = CGameHelper::Pos2BuildPos(bi, false);
+
+		buildCommands += 1;
+		uwaterCommands += (bi.pos.y < CGround::GetWaterLevel(bi.pos.x, bi.pos.z));
 	}
 
-	auto& shader = rb.GetShader();
-	shader.Enable();
-	rb.DrawElements(GL_LINES);
-	shader.Disable();
+	// worst case - 2 squares per building (when underwater) - 8 vertices * 3 floats
+	std::vector<GLfloat>   quadVerts(buildCommands * 12);
+	std::vector<GLfloat> uwquadVerts(buildCommands * 12); // underwater
+	// 4 vertical lines
+	std::vector<GLfloat> lineVerts(uwaterCommands * 24);
+	// colors for lines
+	std::vector<GLfloat> lineColors(uwaterCommands * 48);
+
+	unsigned int   quadcounter = 0;
+	unsigned int uwquadcounter = 0;
+	unsigned int   linecounter = 0;
+
+	for (const Command& c: commandQue) {
+		if (buildOptions.find(c.GetID()) == buildOptions.end())
+			continue;
+
+		BuildInfo bi;
+
+		if (!bi.Parse(c))
+			continue;
+
+		bi.pos = CGameHelper::Pos2BuildPos(bi, false);
+
+		const float xsize = bi.GetXSize() * (SQUARE_SIZE >> 1);
+		const float zsize = bi.GetZSize() * (SQUARE_SIZE >> 1);
+
+		const float h = bi.pos.y;
+		const float x1 = bi.pos.x - xsize;
+		const float z1 = bi.pos.z - zsize;
+		const float x2 = bi.pos.x + xsize;
+		const float z2 = bi.pos.z + zsize;
+
+		quadVerts[quadcounter++] = x1;
+		quadVerts[quadcounter++] = h + 1;
+		quadVerts[quadcounter++] = z1;
+		quadVerts[quadcounter++] = x1;
+		quadVerts[quadcounter++] = h + 1;
+		quadVerts[quadcounter++] = z2;
+		quadVerts[quadcounter++] = x2;
+		quadVerts[quadcounter++] = h + 1;
+		quadVerts[quadcounter++] = z2;
+		quadVerts[quadcounter++] = x2;
+		quadVerts[quadcounter++] = h + 1;
+		quadVerts[quadcounter++] = z1;
+
+		if (bi.pos.y >= 0.0f)
+			continue;
+
+		const float col[8] = {
+			0.0f, 0.0f, 1.0f, 0.5f, // start color
+			0.0f, 0.5f, 1.0f, 1.0f, // end color
+		};
+
+		uwquadVerts[uwquadcounter++] = x1;
+		uwquadVerts[uwquadcounter++] = 0.0f;
+		uwquadVerts[uwquadcounter++] = z1;
+		uwquadVerts[uwquadcounter++] = x1;
+		uwquadVerts[uwquadcounter++] = 0.0f;
+		uwquadVerts[uwquadcounter++] = z2;
+		uwquadVerts[uwquadcounter++] = x2;
+		uwquadVerts[uwquadcounter++] = 0.0f;
+		uwquadVerts[uwquadcounter++] = z2;
+		uwquadVerts[uwquadcounter++] = x2;
+		uwquadVerts[uwquadcounter++] = 0.0f;
+		uwquadVerts[uwquadcounter++] = z1;
+
+		for (int i = 0; i < 4; ++i) {
+			std::copy(col, col + 8, lineColors.begin() + linecounter * 2 + i * 8);
+		}
+
+		lineVerts[linecounter++] = x1;
+		lineVerts[linecounter++] = h;
+		lineVerts[linecounter++] = z1;
+		lineVerts[linecounter++] = x1;
+		lineVerts[linecounter++] = 0.0f;
+		lineVerts[linecounter++] = z1;
+
+		lineVerts[linecounter++] = x2;
+		lineVerts[linecounter++] = h;
+		lineVerts[linecounter++] = z1;
+		lineVerts[linecounter++] = x2;
+		lineVerts[linecounter++] = 0.0f;
+		lineVerts[linecounter++] = z1;
+
+		lineVerts[linecounter++] = x2;
+		lineVerts[linecounter++] = h;
+		lineVerts[linecounter++] = z2;
+		lineVerts[linecounter++] = x2;
+		lineVerts[linecounter++] = 0.0f;
+		lineVerts[linecounter++] = z2;
+
+		lineVerts[linecounter++] = x1;
+		lineVerts[linecounter++] = h;
+		lineVerts[linecounter++] = z2;
+		lineVerts[linecounter++] = x1;
+		lineVerts[linecounter++] = 0.0f;
+		lineVerts[linecounter++] = z2;
+	}
+
+	if (quadcounter > 0) {
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		glVertexPointer(3, GL_FLOAT, 0, &quadVerts[0]);
+		glDrawArrays(GL_QUADS, 0, quadcounter / 3);
+
+		if (linecounter > 0) {
+			glPushAttrib(GL_CURRENT_BIT);
+			glColor4f(0.0f, 0.5f, 1.0f, 1.0f); // same as end color of lines
+			glVertexPointer(3, GL_FLOAT, 0, &uwquadVerts[0]);
+			glDrawArrays(GL_QUADS, 0, uwquadcounter / 3);
+			glPopAttrib();
+
+			glEnableClientState(GL_COLOR_ARRAY);
+			glColorPointer(4, GL_FLOAT, 0, &lineColors[0]);
+			glVertexPointer(3, GL_FLOAT, 0, &lineVerts[0]);
+			glDrawArrays(GL_LINES, 0, linecounter / 3);
+			glDisableClientState(GL_COLOR_ARRAY);
+		}
+
+		glDisableClientState(GL_VERTEX_ARRAY);
+	}
 }
 

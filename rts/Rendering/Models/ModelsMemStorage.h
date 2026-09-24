@@ -165,9 +165,6 @@ public:
 	size_t GetObjOffset(const CWorldObject* o) const;
 	const MyType& GetObjUniformsArray(const CWorldObject* o) const;
 	MyType& GetObjUniformsArray(const CWorldObject* o);
-	// like GetObjUniformsArray, but does not flag the entry for GPU upload; call SetUpdate(offset) if it was changed
-	MyType& GetObjUniformsArrayNoUpdate(size_t offset) { return storage[offset]; }
-	void SetUpdate(size_t offset) { updateList.SetUpdate(offset); }
 	void   DelObject(const CWorldObject* o);
 
 	size_t AddObject(const SolidObjectDef* o) { return INVALID_INDEX; }

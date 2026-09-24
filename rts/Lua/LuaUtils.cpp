@@ -4,7 +4,6 @@
 
 #include <cstring>
 #include <cctype>
-#include <memory>
 
 #include "LuaUtils.h"
 #include "LuaConfig.h"
@@ -45,10 +44,8 @@ Json::Value LuaUtils::LuaStackDumper::root  = {};
 /******************************************************************************/
 
 
-using CopiedTableMap = spring::unsynced_map<const void*, int>;
-
-static bool CopyPushData(lua_State* dst, lua_State* src, int index, int depth, std::unique_ptr<CopiedTableMap>& alreadyCopied);
-static bool CopyPushTable(lua_State* dst, lua_State* src, int index, int depth, std::unique_ptr<CopiedTableMap>& alreadyCopied);
+static bool CopyPushData(lua_State* dst, lua_State* src, int index, int depth, spring::unsynced_map<const void*, int>& alreadyCopied);
+static bool CopyPushTable(lua_State* dst, lua_State* src, int index, int depth, spring::unsynced_map<const void*, int>& alreadyCopied);
 
 
 static inline int PosAbsLuaIndex(lua_State* src, int index)
@@ -60,13 +57,7 @@ static inline int PosAbsLuaIndex(lua_State* src, int index)
 }
 
 
-// map of already-copied *tables* (keyed by src pointer) to their dst registry
-// ref; needed to preserve shared-reference/cycle semantics for tables, e.g.
-// "local t = {}; t[t] = t". Strings need no such cache: they are immutable
-// values and Lua interns them, so pushing the same content twice is already
-// observably identical (rawequal) without us tracking it ourselves.
-// Allocated lazily since most CopyData calls never see a table.
-static bool CopyPushData(lua_State* dst, lua_State* src, int index, int depth, std::unique_ptr<CopiedTableMap>& alreadyCopied)
+static bool CopyPushData(lua_State* dst, lua_State* src, int index, int depth, spring::unsynced_map<const void*, int>& alreadyCopied)
 {
 	switch (lua_type(src, index)) {
 		case LUA_TBOOLEAN: {
@@ -82,8 +73,20 @@ static bool CopyPushData(lua_State* dst, lua_State* src, int index, int depth, s
 			size_t len;
 			const char* data = lua_tolstring(src, index, &len);
 
-			// push it directly; no need to ref/unref-cache it ourselves
+			// check cache
+			auto it = alreadyCopied.find(data);
+			if (it != alreadyCopied.end()) {
+				lua_rawgeti(dst, LUA_REGISTRYINDEX, it->second);
+				break;
+			}
+
+			// copy string
 			lua_pushlstring(dst, data, len);
+
+			// cache it
+			lua_pushvalue(dst, -1);
+			const int dstRef = luaL_ref(dst, LUA_REGISTRYINDEX);
+			alreadyCopied[data] = dstRef;
 		} break;
 
 		case LUA_TTABLE: {
@@ -100,17 +103,14 @@ static bool CopyPushData(lua_State* dst, lua_State* src, int index, int depth, s
 }
 
 
-static bool CopyPushTable(lua_State* dst, lua_State* src, int index, int depth, std::unique_ptr<CopiedTableMap>& alreadyCopied)
+static bool CopyPushTable(lua_State* dst, lua_State* src, int index, int depth, spring::unsynced_map<const void*, int>& alreadyCopied)
 {
 	const int table = PosAbsLuaIndex(src, index);
 
-	if (alreadyCopied == nullptr)
-		alreadyCopied = std::make_unique<CopiedTableMap>();
-
 	// check cache
 	const void* p = lua_topointer(src, table);
-	auto it = alreadyCopied->find(p);
-	if (it != alreadyCopied->end()) {
+	auto it = alreadyCopied.find(p);
+	if (it != alreadyCopied.end()) {
 		lua_rawgeti(dst, LUA_REGISTRYINDEX, it->second);
 		return true;
 	}
@@ -129,7 +129,7 @@ static bool CopyPushTable(lua_State* dst, lua_State* src, int index, int depth, 
 	// cache it
 	lua_pushvalue(dst, -1);
 	const int dstRef = luaL_ref(dst, LUA_REGISTRYINDEX);
-	(*alreadyCopied)[p] = dstRef;
+	alreadyCopied[p] = dstRef;
 
 	// copy table entries
 	for (lua_pushnil(src); lua_next(src, table) != 0; lua_pop(src, 1)) {
@@ -158,8 +158,7 @@ int LuaUtils::CopyData(lua_State* dst, lua_State* src, int count)
 	// hold a map of all already copied tables in the lua's registry table
 	// needed for recursive tables, i.e. "local t = {}; t[t] = t"
 	// the order of traversal doesn't matter so we can use an unsynced map
-	// (allocated lazily by CopyPushTable, only when a table is encountered)
-	std::unique_ptr<CopiedTableMap> alreadyCopied;
+	spring::unsynced_map<const void*, int> alreadyCopied;
 
 	const int startIndex = (srcTop - count + 1);
 	const int endIndex   = srcTop;
@@ -168,10 +167,8 @@ int LuaUtils::CopyData(lua_State* dst, lua_State* src, int count)
 	}
 
 	// clear map
-	if (alreadyCopied != nullptr) {
-		for (auto& pair: *alreadyCopied) {
-			luaL_unref(dst, LUA_REGISTRYINDEX, pair.second);
-		}
+	for (auto& pair: alreadyCopied) {
+		luaL_unref(dst, LUA_REGISTRYINDEX, pair.second);
 	}
 
 	const int curSrcTop = lua_gettop(src);

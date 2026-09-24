@@ -1,10 +1,8 @@
 #pragma once
 
-#include <cstring>
 #include <vector>
 #include <array>
 #include <functional>
-#include <type_traits>
 
 #include <unordered_map>
 
@@ -205,10 +203,7 @@ inline void CModelDrawerDataBase<T>::UpdateObjectTrasform(const T* o)
 template<typename T>
 inline void CModelDrawerDataBase<T>::UpdateObjectUniforms(const T* o)
 {
-	const size_t offset = modelUniformsStorage.GetObjOffset(o);
-	auto& uni = modelUniformsStorage.GetObjUniformsArrayNoUpdate(offset);
-	const ModelUniformData prev = uni;
-
+	auto& uni = modelUniformsStorage.GetObjUniformsArray(o);
 	uni.drawFlag = o->drawFlag;
 
 	if (gu->spectatingFullView || o->IsInLosForAllyTeam(gu->myAllyTeam)) {
@@ -219,21 +214,7 @@ inline void CModelDrawerDataBase<T>::UpdateObjectUniforms(const T* o)
 		uni.speed = o->speed;
 		uni.maxHealth = o->maxHealth;
 		uni.health = o->health;
-
-		// only units carry a meaningful build progress; let the GL4 model shaders treat
-		// everything else (e.g. features) as fully built so construction clip planes are a no-op
-		if constexpr (std::is_same_v<T, CUnit>) {
-			uni.buildProgress = o->buildProgress;
-			uni.modelDrawHeight = (o->model != nullptr) ? o->model->CalcDrawHeight() : 0.0f;
-		} else {
-			uni.buildProgress = 1.0f;
-			uni.modelDrawHeight = 0.0f;
-		}
 	}
-
-	// only re-upload objects whose uniforms actually changed (static buildings, features, idle units don't)
-	if (std::memcmp(&prev, &uni, sizeof(ModelUniformData)) != 0)
-		modelUniformsStorage.SetUpdate(offset);
 }
 
 template<typename T>

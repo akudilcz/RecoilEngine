@@ -61,8 +61,6 @@ public:
 	void RenderProjectileCreated(const CProjectile* projectile);
 	void RenderProjectileDestroyed(const CProjectile* projectile);
 
-	void ConfigNotify(const std::string& key, const std::string& value);
-
 	unsigned int NumSmokeTextures() const { return (smokeTextures.size()); }
 
 	void IncPerlinTexObjectCount() { perlinTexObjects++; }
@@ -200,12 +198,6 @@ private:
 	unsigned int alphaRangeDrawFrame = 0;
 
 	bool drawSorted = true;
-
-	// cached config values, kept up to date via ConfigNotify() instead of
-	// calling configHandler->Get*() on every draw call
-	float cfgProjectileReflectionMinRadius = 0.0f;
-	bool cfgProjectileDrawThreadedFill = true;
-	bool cfgProjectileDrawReuseWaterPasses = true;
 
 	Shader::IProgramObject* fxShader = nullptr;
 	Shader::IProgramObject* fxShadowShader = nullptr;

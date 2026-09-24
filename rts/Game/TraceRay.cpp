@@ -10,7 +10,6 @@
 #include "Sim/Misc/CollisionHandler.h"
 #include "Sim/Misc/CollisionVolume.h"
 #include "Sim/Misc/GeometricObjects.h"
-#include "Sim/Misc/GlobalSynced.h"
 #include "Sim/Misc/LosHandler.h"
 #include "Sim/Misc/QuadField.h"
 #include "Sim/Misc/TeamHandler.h"
@@ -243,18 +242,6 @@ float TraceRay(
 
 		// feature intersection
 		if (scanForFeatures) {
-			// NOTE: objects spanning multiple quads are re-tested per quad;
-			// a tempNum-based dedup was considered here but TraceRay() is
-			// also reachable from ExternalAI callback code (AICallback.cpp,
-			// AICheats.cpp) which may not execute identically on all clients
-			// (a Skirmish AI typically only runs on the machine hosting it).
-			// gs->GetTempNum()/CSolidObject::tempNum are part of
-			// CGlobalSynced, which is documented to "remain synced" across
-			// clients, so advancing it from a call path that isn't
-			// guaranteed to run in lockstep on every client risks
-			// desyncing gs->tempNum's value between clients; skipped here
-			// for safety (kept for TestCone/TestTrajectoryCone below, which
-			// are only reachable from synced per-unit weapon code).
 			for (const int quadIdx: *qfQuery.quads) {
 				const CQuadField::Quad& quad = quadField.GetQuad(quadIdx);
 
@@ -283,8 +270,6 @@ float TraceRay(
 
 		// unit intersection
 		if (scanForAnyUnits) {
-			// see comment above (feature loop) on why tempNum dedup is not
-			// used in this function
 			for (const int quadIdx: *qfQuery.quads) {
 				const CQuadField::Quad& quad = quadField.GetQuad(quadIdx);
 
@@ -561,27 +546,15 @@ bool TestCone(
 	const bool scanForNeutrals = ((traceFlags & Collision::NONEUTRALS  ) == 0);
 	const bool scanForFeatures = ((traceFlags & Collision::NOFEATURES  ) == 0);
 
-	// TestConeHelper is a pure function of (from, dir, length, spread, object
-	// state); an object spanning multiple quads gives the same result each
-	// time it is tested, so skipping repeat tests (via tempNum) cannot change
-	// whether/where this function returns true.
-	// Synced and single-threaded only: gs->tempNum and each object's tempNum are shared
-	// state, so calling this from parallel weapon updates would race and desync.
-	const int tempNum = gs->GetTempNum();
-
 	for (const int quadIdx: *qfQuery.quads) {
 		const CQuadField::Quad& quad = quadField.GetQuad(quadIdx);
 
 		if (scanForAllies) {
-			for (CUnit* u: quad.teamUnits[allyteam]) {
+			for (const CUnit* u: quad.teamUnits[allyteam]) {
 				if (u == owner)
 					continue;
 				if (!u->HasCollidableStateBit(CSolidObject::CSTATE_BIT_QUADMAPRAYS))
 					continue;
-				if (u->tempNum == tempNum)
-					continue;
-
-				u->tempNum = tempNum;
 
 				if (TestConeHelper(from, dir, length, spread, u))
 					return true;
@@ -589,17 +562,13 @@ bool TestCone(
 		}
 
 		if (scanForNeutrals) {
-			for (CUnit* u: quad.units) {
+			for (const CUnit* u: quad.units) {
 				if (!u->IsNeutral())
 					continue;
 				if (u == owner)
 					continue;
 				if (!u->HasCollidableStateBit(CSolidObject::CSTATE_BIT_QUADMAPRAYS))
 					continue;
-				if (u->tempNum == tempNum)
-					continue;
-
-				u->tempNum = tempNum;
 
 				if (TestConeHelper(from, dir, length, spread, u))
 					return true;
@@ -607,13 +576,9 @@ bool TestCone(
 		}
 
 		if (scanForFeatures) {
-			for (CFeature* f: quad.features) {
+			for (const CFeature* f: quad.features) {
 				if (!f->HasCollidableStateBit(CSolidObject::CSTATE_BIT_QUADMAPRAYS))
 					continue;
-				if (f->tempNum == tempNum)
-					continue;
-
-				f->tempNum = tempNum;
 
 				if (TestConeHelper(from, dir, length, spread, f))
 					return true;
@@ -648,25 +613,16 @@ bool TestTrajectoryCone(
 	const bool scanForNeutrals = ((traceFlags & Collision::NONEUTRALS  ) == 0);
 	const bool scanForFeatures = ((traceFlags & Collision::NOFEATURES  ) == 0);
 
-	// see TestCone: TestTrajectoryConeHelper is a pure function of its
-	// arguments (DetectHit only reads the object's own collision volume), so
-	// dedup via tempNum cannot change whether/where this returns true
-	const int tempNum = gs->GetTempNum();
-
 	for (const int quadIdx: *qfQuery.quads) {
 		const CQuadField::Quad& quad = quadField.GetQuad(quadIdx);
 
 		// friendly units in this quad
 		if (scanForAllies) {
-			for (CUnit* u: quad.teamUnits[allyteam]) {
+			for (const CUnit* u: quad.teamUnits[allyteam]) {
 				if (u == owner)
 					continue;
 				if (!u->HasCollidableStateBit(CSolidObject::CSTATE_BIT_QUADMAPRAYS))
 					continue;
-				if (u->tempNum == tempNum)
-					continue;
-
-				u->tempNum = tempNum;
 
 				if (TestTrajectoryConeHelper(from, dir, length, linear, quadratic, spread, 0.0f, u))
 					return true;
@@ -676,17 +632,13 @@ bool TestTrajectoryCone(
 
 		// neutral units in this quad
 		if (scanForNeutrals) {
-			for (CUnit* u: quad.units) {
+			for (const CUnit* u: quad.units) {
 				if (!u->IsNeutral())
 					continue;
 				if (u == owner)
 					continue;
 				if (!u->HasCollidableStateBit(CSolidObject::CSTATE_BIT_QUADMAPRAYS))
 					continue;
-				if (u->tempNum == tempNum)
-					continue;
-
-				u->tempNum = tempNum;
 
 				if (TestTrajectoryConeHelper(from, dir, length, linear, quadratic, spread, 0.0f, u))
 					return true;
@@ -695,13 +647,9 @@ bool TestTrajectoryCone(
 
 		// features in this quad
 		if (scanForFeatures) {
-			for (CFeature* f: quad.features) {
+			for (const CFeature* f: quad.features) {
 				if (!f->HasCollidableStateBit(CSolidObject::CSTATE_BIT_QUADMAPRAYS))
 					continue;
-				if (f->tempNum == tempNum)
-					continue;
-
-				f->tempNum = tempNum;
 
 				if (TestTrajectoryConeHelper(from, dir, length, linear, quadratic, spread, 0.0f, f))
 					return true;

@@ -211,10 +211,6 @@ void CglShaderFontRenderer::HandleTextureUpdate(CFontTexture& fnt, bool onlyUplo
 	if (!onlyUpload)
 		fnt.UpdateGlyphAtlasTexture();
 
-	// avoid the glGetIntegerv round-trip when there is nothing to upload
-	if (!fnt.GlyphAtlasTextureNeedsUpload())
-		return;
-
 	GLint dl = 0;
 	glGetIntegerv(GL_LIST_INDEX, &dl);
 	if (dl == 0) {
@@ -354,10 +350,6 @@ void CglNoShaderFontRenderer::HandleTextureUpdate(CFontTexture& fnt, bool onlyUp
 	RECOIL_DETAILED_TRACY_ZONE;
 	if (!onlyUpload)
 		fnt.UpdateGlyphAtlasTexture();
-
-	// avoid the glGetIntegerv round-trip when there is nothing to upload
-	if (!fnt.GlyphAtlasTextureNeedsUpload())
-		return;
 
 	GLint dl = 0;
 	glGetIntegerv(GL_LIST_INDEX, &dl);

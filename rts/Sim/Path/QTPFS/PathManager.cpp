@@ -838,14 +838,6 @@ void QTPFS::PathManager::Update() {
 
 		// Mark all dirty paths so that they can be recalculated
 		int pathsMarkedDirty = 0;
-
-		// A path can be touched by multiple damaged blocks in the same frame; SetBoundingBox()
-		// walks every point in the path, and its result only depends on the path's final state
-		// (nextPointIndex/points), not on how many times or in what order it is called this frame.
-		// So defer it to a single call per path, after all of this frame's dirty-path entries for
-		// that path have been merged, instead of once per entry.
-		std::vector<QTPFS::entity> pathsNeedingBoundingBoxUpdate;
-
 		for (auto& layerDirtyPaths : pathCache.dirtyPaths) {
 			// LOG("%s: start: %d", __func__, (int)layerDirtyPaths.size());
 			for (auto dirtyPathDetail : layerDirtyPaths) {
@@ -889,6 +881,7 @@ void QTPFS::PathManager::Update() {
 						const unsigned int currRepathTrigger = path.GetRepathTriggerIndex();
 						if (currRepathTrigger == 0 || currRepathTrigger > dirtyPathDetail.autoRepathTrigger) {
 							path.SetRepathTriggerIndex(dirtyPathDetail.autoRepathTrigger);
+							path.SetBoundingBox();
 						}
 					}
 					// LOG("%s: clean path pos %d -> %d", __func__
@@ -899,24 +892,12 @@ void QTPFS::PathManager::Update() {
 					const int nextCleanNodeId = dirtyPathDetail.nodesAreCleanFromNodeId;
 					path.SetFirstNodeIdOfCleanPath(std::max(curCleanNodeId, nextCleanNodeId));
 					// if (path.IsBoundingBoxOverriden())
-					pathsNeedingBoundingBoxUpdate.push_back(pathEntity);
+						path.SetBoundingBox();
 				//}
 			}
 			layerDirtyPaths.clear();
 			// LOG("%s: end: %d", __func__, (int)layerDirtyPaths.size());
 		}
-
-		// Apply the merged bounding-box recompute once per path (see comment above).
-		std::sort(pathsNeedingBoundingBoxUpdate.begin(), pathsNeedingBoundingBoxUpdate.end());
-		pathsNeedingBoundingBoxUpdate.erase(
-			std::unique(pathsNeedingBoundingBoxUpdate.begin(), pathsNeedingBoundingBoxUpdate.end()),
-			pathsNeedingBoundingBoxUpdate.end()
-		);
-		for (QTPFS::entity pathEntity : pathsNeedingBoundingBoxUpdate) {
-			if (!registry.valid(pathEntity)) { continue; }
-			registry.get<IPath>(pathEntity).SetBoundingBox();
-		}
-
 		if (refreshDirtyPathRateFrame == QTPFS_LAST_FRAME && pathsMarkedDirty > 0)
 			refreshDirtyPathRateFrame = gs->frameNum + GAME_SPEED;
 	}
