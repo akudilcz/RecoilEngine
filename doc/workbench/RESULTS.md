@@ -4,6 +4,21 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-09-24: simulation optimisations on lemon (i9-14900K, max sim speed, identical game state)
+
+Measured with `--sim-speed max` (simulation time per frame, median of interleaved runs) on the headless engine; every step keeps the game state identical (sync_repro state digests over 3,000 frames).
+
+| Step | big_battle ms/sim frame | mass_move_5000 ms/sim frame |
+|---|---|---|
+| before (fork master at start of the day) | ~11.4 | ~12.5 |
+| + collision transform cache | ~10.4 (-10%) | - |
+| + closest-target search nearest-first | ~7.2 (-24%) | - |
+| + `-march=native` build | ~7.4 (noise) | ~11.5 (-1.5%) |
+| + quad-field stamps out of the objects | ~7.1 (-13% vs native) | ~10.7 (-7%) |
+| + model-uniform slot cache (draw side) | ~7.1 | ~10.7 (GetObjOffset gone from the profile) |
+
+Overall: big battles ~1.6x the simulation throughput (3.9x real time at max speed), 5,000 moving units ~15% less sim time. On the RTX 4090, drawing is ~1.3-1.9 ms per frame at 1920x1080, so on lemon the simulation is the limit. Rejected: a `TraceRay` bounding-sphere pre-check (the exact version gives no gain), LTO (build image's gold lacks the LTO plugin; not pursued), `-march` beyond native (no gain: strict float flags block vectorisation).
+
 ## 2026-09-24: do our performance patches speed the engine up? (A/B, identical battles)
 
 **noperf** = master with only our performance patches reverted (merged community PRs, fixes, workbench and the non-blocking GPU timer kept), so both engines simulate the same battles; `--seed 1234`, 5 interleaved repetitions each, median of per-window p50 (ms).
