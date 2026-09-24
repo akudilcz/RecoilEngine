@@ -134,3 +134,22 @@ class ScenarioRows(unittest.TestCase):
             ("dev", "default", 0, "b", 1, 2),
             ("dev", "default", 0, "perf", 0, 0),
         ])
+
+
+class StateDigests(unittest.TestCase):
+    def cell(self, detail):
+        return {"scenarios": {"sync_repro": {"checks": [
+            {"name": "battle_ran", "pass": True, "detail": ""},
+            {"name": "state_digests", "pass": True, "detail": detail}]}}}
+
+    def test_parses_frame_hash_pairs_in_the_sync_checksum_format(self):
+        self.assertEqual(report.state_digests(self.cell("4096:17,4196:23")),
+                         [{"frame": 4096, "checksum": "17"}, {"frame": 4196, "checksum": "23"}])
+
+    def test_cells_without_digests_have_none(self):
+        self.assertIsNone(report.state_digests({"scenarios": {}}))
+
+    def test_first_differing_game_state_is_found(self):
+        a = report.state_digests(self.cell("4096:1,4196:2,4296:3"))
+        b = report.state_digests(self.cell("4096:1,4196:9,4296:3"))
+        self.assertEqual(report.compare_sync(a, b), ("diverged", 4196))

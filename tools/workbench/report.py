@@ -45,6 +45,21 @@ def compare_sync(baseline, candidate):
     return "identical", None
 
 
+def state_digests(cell):
+    """Game-state digests of sync_repro (every N frames: all units' ids, types, positions,
+    health) as [{frame, checksum}], or None. Unlike sync checksums, these ignore synced writes
+    that are undone again (e.g. a weapon test rotating its unit and back), so they tell two
+    builds that play the same game apart from builds that don't."""
+    for chk in ((cell.get("scenarios") or {}).get("sync_repro") or {}).get("checks", []):
+        if chk.get("name") == "state_digests" and chk.get("detail"):
+            out = []
+            for pair in chk["detail"].split(","):
+                frame, _, digest = pair.partition(":")
+                out.append({"frame": int(frame), "checksum": digest})
+            return out
+    return None
+
+
 def sync_reference(cells, base):
     """(reference checksums, label): the baseline engine's first cell, or a clearly labelled fallback."""
     for c in cells:
@@ -224,14 +239,19 @@ def write_report(out_root):
         ref, ref_label = sync_reference(cells, base)
         parts.append("<h2>Simulation determinism</h2><p>Per-frame sync checksums of the seeded sync_repro battle, "
                      f"compared with the first cell of {esc(ref_label)}.</p><table><tr><th>engine</th><th>profile</th>"
-                     "<th>rep</th><th>frames</th><th>digest</th><th>vs baseline</th></tr>")
+                     "<th>rep</th><th>frames</th><th>digest</th><th>checksums vs baseline</th>"
+                     "<th>game state vs baseline</th></tr>")
+        ref_cell = next((c for c in synced if c["engine"] == base), synced[0])
+        ref_state = state_digests(ref_cell)
         for c in synced:
             verdict, frame = compare_sync(ref, c["sync"]["checksums"])
             text = verdict if frame is None else f"diverged at run frame {frame}"
-            cls = "regression" if verdict == "diverged" else ""
+            sverdict, sframe = compare_sync(ref_state, state_digests(c))
+            stext = sverdict if sframe is None else f"differs at frame {sframe}"
+            cls = "regression" if sverdict == "diverged" or (verdict == "diverged" and sverdict == "n/a") else ""
             parts.append(f"<tr class='{cls}'><td>{esc(c['engine'])}</td><td>{esc(c['profile'])}</td><td>{c['rep']}</td>"
                          f"<td>{c['sync'].get('frameCount')}</td><td>{esc(str(c['sync'].get('digest')))}</td>"
-                         f"<td>{esc(text)}</td></tr>")
+                         f"<td>{esc(text)}</td><td>{esc(stext)}</td></tr>")
         parts.append("</table>")
     if checks:
         parts.append("<h2>Failed checks</h2><table><tr><th>engine</th><th>profile</th><th>scenario</th>"

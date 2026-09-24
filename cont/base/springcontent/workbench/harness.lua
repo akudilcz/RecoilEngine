@@ -59,7 +59,7 @@ local syncedCallins = {} -- callin name -> { {scenario, fn}, ... }
 -- synced callins a scenario may handle via `syncedCallins = { UnitDamaged = fn, ... }`;
 -- the game's gadget forwards them with H.SyncedCallin. Every loaded scenario's handlers
 -- run for the whole run, so a handler should only react to units its scenario made.
-H.SYNCED_CALLINS = { "UnitCreated", "UnitFinished", "UnitDamaged", "UnitDestroyed" }
+H.SYNCED_CALLINS = { "UnitCreated", "UnitFinished", "UnitDamaged", "UnitDestroyed", "GameFrame" }
 
 function H.StartSynced()
 	for _, sc in ipairs(loadScenarios(Spring.Workbench.GetPattern())) do
