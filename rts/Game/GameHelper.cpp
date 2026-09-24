@@ -806,9 +806,37 @@ CUnit* CGameHelper::GetClosestEnemyUnit(const CUnit* excludeUnit, const float3& 
 CUnit* CGameHelper::GetClosestValidTarget(const float3& pos, float searchRadius, int searchAllyteam, const CMobileCAI* cai)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	Query::ClosestUnit q(pos, searchRadius);
-	QueryUnits(Filter::Enemy_InLos_ValidTarget(searchAllyteam, cai), q);
-	return q.GetClosestUnit();
+	// Same result as QueryUnits(Filter::Enemy_InLos_ValidTarget, Query::ClosestUnit): the
+	// closest valid unit within the radius, ties going to the one visited last. But
+	// IsValidTarget (weapon ray traces; the bulk of large-battle CPU) is only evaluated
+	// nearest-first until one passes, instead of for every unit in the searched quads.
+	struct Candidate { float sqDist; int order; CUnit* unit; };
+	struct CollectInRadius : public Query::Base {
+		std::vector<Candidate>& out;
+		CollectInRadius(const float3& p, float r, std::vector<Candidate>& o) : Query::Base(p, r), out(o) {}
+		void AddUnit(CUnit* u) {
+			const float sqDist = (pos - u->midPos).SqLength2D(); // as Query::ClosestUnit
+			if (sqDist <= sqRadius)
+				out.push_back({sqDist, static_cast<int>(out.size()), u});
+		}
+	};
+
+	std::vector<Candidate> candidates;
+	CollectInRadius q(pos, searchRadius, candidates);
+	QueryUnits(Filter::Enemy_InLos(nullptr, searchAllyteam), q);
+
+	// nearest first; among equal distances the later-visited one first (ClosestUnit keeps
+	// replacing on <=, so the last visited of the nearest valid units wins)
+	std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+		return (a.sqDist != b.sqDist) ? (a.sqDist < b.sqDist) : (a.order > b.order);
+	});
+
+	for (const Candidate& c: candidates) {
+		if (cai->IsValidTarget(c.unit, nullptr))
+			return c.unit;
+	}
+
+	return nullptr;
 }
 
 CUnit* CGameHelper::GetClosestEnemyUnitNoLosTest(
