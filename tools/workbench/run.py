@@ -33,7 +33,9 @@ SUITE_PROFILES = {
 
 
 def expand_matrix(engines, profiles, reps):
-    return [Cell(name, exe, prof, rep) for name, exe in engines.items() for prof in profiles for rep in range(reps)]
+    # repetitions outermost: a, b, a, b, ... so machine drift (warm-up, thermals, background
+    # load) spreads over every engine instead of biasing whichever ran last
+    return [Cell(name, exe, prof, rep) for rep in range(reps) for prof in profiles for name, exe in engines.items()]
 
 
 def render_startscript(template, map_name, seed=0):

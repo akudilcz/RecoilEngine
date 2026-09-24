@@ -14,6 +14,11 @@ class ExpandMatrix(unittest.TestCase):
         self.assertEqual(cells[0], run.Cell("a", "a.exe", "low", 0))
         self.assertEqual(cells[-1], run.Cell("b", "b.exe", "high", 1))
 
+    def test_repetitions_interleave_engines(self):
+        # a, b, a, b: machine drift (warm-up, thermals) spreads over both engines
+        cells = run.expand_matrix({"a": "a.exe", "b": "b.exe"}, ["p"], 2)
+        self.assertEqual([(c.engine, c.rep) for c in cells], [("a", 0), ("b", 0), ("a", 1), ("b", 1)])
+
 
 class StartScript(unittest.TestCase):
     def test_map_substituted_and_offline(self):
