@@ -652,6 +652,10 @@ bool CCollisionHandler::IntersectCylinder(const CollisionVolume* v, const float3
 	// get the length of the ray segment in volume-space
 	const float segLenSq = (pi1 - pi0).SqLength();
 
+	// side-surface hits count only in front of the ray start (t >= 0), like the end-cap
+	// tests below and IntersectEllipsoid; without that, a ray starting just outside a
+	// cylinder and pointing away from it "hit" it behind its start (TraceRay then takes
+	// the hit at distance 0: a precise weapon next to a cylinder-shaped ally could not fire)
 	if (d >= -COLLISION_VOLUME_EPS) {
 		if (a != 0.0f) {
 			// quadratic eq.; one or two surface intersections
@@ -659,7 +663,7 @@ bool CCollisionHandler::IntersectCylinder(const CollisionVolume* v, const float3
 				t0 = -b / (2.0f * a);
 				p0 = (upi0 + (udir * t0)) * inv;
 				s0 = (p0 - pi0).SqLength();
-				b0 = (s0 < segLenSq  &&  math::fabs(p0[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
+				b0 = (t0 >= 0.0f && s0 < segLenSq  &&  math::fabs(p0[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
 			} else {
 				rd = math::sqrt(d);
 				t0 = (-b - rd) / (2.0f * a);
@@ -668,8 +672,8 @@ bool CCollisionHandler::IntersectCylinder(const CollisionVolume* v, const float3
 				p1 = (upi0 + (udir * t1)) * inv;
 				s0 = (p0 - pi0).SqLength();
 				s1 = (p1 - pi0).SqLength();
-				b0 = (s0 < segLenSq  &&  math::fabs(p0[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
-				b1 = (s1 < segLenSq  &&  math::fabs(p1[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
+				b0 = (t0 >= 0.0f && s0 < segLenSq  &&  math::fabs(p0[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
+				b1 = (t1 >= 0.0f && s1 < segLenSq  &&  math::fabs(p1[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
 			}
 		} else {
 			if (b != 0.0f) {
@@ -677,7 +681,7 @@ bool CCollisionHandler::IntersectCylinder(const CollisionVolume* v, const float3
 				t0 = -c / b;
 				p0 = (upi0 + (udir * t0)) * inv;
 				s0 = (p0 - pi0).SqLength();
-				b0 = (s0 < segLenSq  &&  math::fabs(p0[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
+				b0 = (t0 >= 0.0f && s0 < segLenSq  &&  math::fabs(p0[pAx]) < ahs[pAx]) * CQ_POINT_ON_RAY;
 			}
 		}
 	}
