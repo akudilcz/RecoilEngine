@@ -195,6 +195,9 @@ private:
 	inline static MyType dummy = {};
 
 	spring::unordered_map<CWorldObject*, size_t> objectsMap;
+	// bumped by Init/Kill so objects' cached slots (CWorldObject::modelUniformsIdx) from a
+	// previous storage are never trusted; starts at 1 (objects start at 0 = no slot)
+	uint32_t generation = 1;
 	spring::FreeListMap<MyType> storage;
 };
 

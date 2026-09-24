@@ -102,6 +102,11 @@ protected:
 	float drawRadius = 0.0f;    ///< unsynced, used for projectile visibility culling
 public:
 	std::array<int, ThreadPool::MAX_THREADS> mtTempNum = {};
+
+	// unsynced: this object's slot in ModelUniformsStorage, valid while modelUniformsGen
+	// matches the storage's generation (saves a hash lookup per object per drawn frame)
+	mutable size_t modelUniformsIdx = ~size_t(0);
+	mutable uint32_t modelUniformsGen = 0;
 };
 
 #endif /* WORLD_OBJECT_H */

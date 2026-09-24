@@ -14,6 +14,7 @@ void ModelUniformsStorage::Init()
 	assert(objectsMap.empty());
 	assert(storage.empty());
 
+	generation++;
 	storage[AddObject(static_cast<const CWorldObject*>(nullptr))] = dummy;
 }
 
@@ -23,6 +24,7 @@ void ModelUniformsStorage::Kill()
 	updateList.Clear();
 	storage.clear();
 	objectsMap.clear();
+	generation++;
 }
 
 size_t ModelUniformsStorage::AddObject(const CWorldObject* o)
@@ -30,6 +32,11 @@ size_t ModelUniformsStorage::AddObject(const CWorldObject* o)
 	RECOIL_DETAILED_TRACY_ZONE;
 	const size_t idx = storage.Add(ModelUniformData());
 	objectsMap[const_cast<CWorldObject*>(o)] = idx;
+
+	if (o != nullptr) {
+		o->modelUniformsIdx = idx;
+		o->modelUniformsGen = generation;
+	}
 
 	if (storage.size() > updateList.Size()) {
 		//new item got added to the end of storage
@@ -64,11 +71,17 @@ void ModelUniformsStorage::DelObject(const CWorldObject* o)
 	assert(storage.size() == updateList.Size());
 
 	objectsMap.erase(it);
+
+	if (o != nullptr)
+		o->modelUniformsGen = 0;
 }
 
 size_t ModelUniformsStorage::GetObjOffset(const CWorldObject* o)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (o != nullptr && o->modelUniformsGen == generation)
+		return o->modelUniformsIdx;
+
 	const auto it = objectsMap.find(const_cast<CWorldObject*>(o));
 	if (it != objectsMap.end())
 		return it->second;
@@ -80,6 +93,9 @@ size_t ModelUniformsStorage::GetObjOffset(const CWorldObject* o)
 size_t ModelUniformsStorage::GetObjOffset(const CWorldObject* o) const
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (o != nullptr && o->modelUniformsGen == generation)
+		return o->modelUniformsIdx;
+
 	const auto it = objectsMap.find(const_cast<CWorldObject*>(o));
 	if (it != objectsMap.end())
 		return it->second;

@@ -12,6 +12,8 @@ CR_REG_METADATA(CWorldObject, (
 	CR_MEMBER(id),
 	CR_MEMBER(tempNum),
 	CR_MEMBER(mtTempNum),
+	CR_IGNORED(modelUniformsIdx),
+	CR_IGNORED(modelUniformsGen),
 	CR_MEMBER(radius),
 	CR_MEMBER(buildeeRadius),
 	CR_MEMBER(height),
