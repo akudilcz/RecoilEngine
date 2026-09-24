@@ -563,8 +563,9 @@ void DumpState(int newMinFrameNum, int newMaxFrameNum, int newFramePeriod, std::
 	{
 		file << "\tCobEngine:\n";
 		file << "\t\tcurrentTime: " << cobEngine->GetCurrTime();
-		file << "\t\tCobThreads: " << cobEngine->GetThreadInstances().size() << "\n";
-		for (const auto& [tid, thread] : cobEngine->GetThreadInstances()) {
+		file << "\t\tCobThreads: " << cobEngine->GetNumThreads() << "\n";
+		for (const auto& [tid, slot] : cobEngine->GetThreadSlotIndex()) {
+			const CCobThread& thread = cobEngine->GetThreadSlots()[slot];
 			auto ownerID = thread.cobInst->GetUnit() ? thread.cobInst->GetUnit()->id : -1;
 			file
 				<< "\t\t\tid: " << tid << " t.id " << thread.GetID() << " t.wt " << thread.GetWakeTime()
