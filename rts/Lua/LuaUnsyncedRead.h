@@ -81,9 +81,6 @@ class LuaUnsyncedRead {
 		static int GetUnitViewPosition(lua_State* L);
 
 		static int GetVisibleUnits(lua_State* L);
-		// drops GetVisibleUnits' per-frame result cache; call when unit state it
-		// filters on changes from unsynced code within a frame (e.g. SetUnitNoDraw)
-		static void InvalidateVisibleUnitsCache();
 		static int GetVisibleFeatures(lua_State* L);
 		static int GetVisibleProjectiles(lua_State* L);
 

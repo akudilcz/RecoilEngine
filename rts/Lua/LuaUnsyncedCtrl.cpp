@@ -1,7 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "LuaUnsyncedCtrl.h"
-#include "LuaUnsyncedRead.h"
 
 #include "Game/Camera/DollyController.h"
 #include "LuaConfig.h"
@@ -2182,8 +2181,6 @@ int LuaUnsyncedCtrl::SetUnitNoDraw(lua_State* L)
 		return 0;
 
 	unit->noDraw = luaL_checkboolean(L, 2);
-	// GetVisibleUnits caches per frame and filters on noDraw
-	LuaUnsyncedRead::InvalidateVisibleUnitsCache();
 	return 0;
 }
 
