@@ -215,6 +215,26 @@ endif()
 	add_spring_test(${test_name} "${test_src}" "${test_libs}" "")
 
 ################################################################################
+### ContainerUtil (header-only helpers, e.g. the batched unit-deletion compaction)
+	set(test_name ContainerUtil)
+	set(test_src
+			"${CMAKE_CURRENT_SOURCE_DIR}/engine/System/testContainerUtil.cpp"
+			${test_Common_sources}
+		)
+
+	add_spring_test(${test_name} "${test_src}" "" "")
+
+################################################################################
+### InfoTextureUpdate (when LOS/radar info textures re-render)
+	set(test_name InfoTextureUpdate)
+	set(test_src
+			"${CMAKE_CURRENT_SOURCE_DIR}/engine/Rendering/testInfoTextureUpdate.cpp"
+			${test_Common_sources}
+		)
+
+	add_spring_test(${test_name} "${test_src}" "" "")
+
+################################################################################
 ### KeyInput (low-fps modifier handling)
 if (TARGET SDL2::SDL2)
 	set(test_name KeyInput)

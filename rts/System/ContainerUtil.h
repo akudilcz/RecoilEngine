@@ -71,6 +71,31 @@ namespace spring {
 		return removed > 0;
 	}
 
+	// Removes every element of v that is in sortedRemove (sorted ascending), keeping the
+	// order of the others, in one O(n log k) pass. Returns how many removed elements sat
+	// at an index below `cursor`, i.e. how far an index into v at `cursor` must move back
+	// (the same adjustment erasing them one at a time would have made).
+	template<typename T>
+	static size_t VectorEraseSorted(std::vector<T>& v, const std::vector<T>& sortedRemove, size_t cursor)
+	{
+		assert(std::is_sorted(sortedRemove.begin(), sortedRemove.end()));
+		size_t writeIdx = 0;
+		size_t removedBeforeCursor = 0;
+
+		for (size_t readIdx = 0; readIdx < v.size(); ++readIdx) {
+			if (std::binary_search(sortedRemove.begin(), sortedRemove.end(), v[readIdx])) {
+				removedBeforeCursor += (readIdx < cursor);
+				continue;
+			}
+			if (writeIdx != readIdx)
+				v[writeIdx] = std::move(v[readIdx]);
+			++writeIdx;
+		}
+
+		v.resize(writeIdx);
+		return removedBeforeCursor;
+	}
+
 	// doesn't preserve order like `std::erase`, but cheaper
 	template<typename T>
 	static bool VectorEraseAll(std::vector<T>& v, const T& e)

@@ -81,6 +81,7 @@ private:
 	bool QueueDeleteUnit(CUnit* unit);
 	void QueueDeleteUnits();
 	void DeleteUnit(CUnit* unit);
+	void FreeUnit(CUnit* unit);
 	void DeleteUnits();
 	void SlowUpdateUnits();
 	void UpdateUnitPathing(const size_t idxBeg, const size_t idxEnd);
@@ -101,6 +102,13 @@ private:
 
 	std::vector<CUnit*> activeUnits;                                     ///< used to get all active units
 	std::vector<CUnit*> unitsToBeRemoved;                                ///< units that will be removed at start of next update
+
+	// scratch buffers for DeleteUnits/GarbageCollectUnit (members, not function statics, so
+	// a nested call is caught by the deletingUnits assert instead of clobbering them)
+	std::vector<CUnit*> deletedUnits;
+	std::vector<CUnit*> deletedUnitsSorted;
+	std::vector<CUnit*> gcPendingUnits;
+	bool deletingUnits = false;
 
 	spring::unordered_map<unsigned int, CBuilderCAI*> builderCAIs;
 
