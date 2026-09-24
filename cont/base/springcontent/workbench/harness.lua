@@ -244,8 +244,14 @@ local function startNext()
 	end
 	Spring.Workbench.BeginScenario(current.name)
 	startedAt = Spring.GetTimer()
-	if current.simSpeed then
-		pinSimSpeed(current.simSpeed == "max" and MAX_SIM_SPEED or tonumber(current.simSpeed) or 1)
+	-- run.py --sim-speed sets WorkbenchSimSpeed for every scenario (e.g. to profile flat out)
+	local speed = current.simSpeed
+	local override = Spring.GetConfigString("WorkbenchSimSpeed", "") or ""
+	if override ~= "" then
+		speed = override
+	end
+	if speed then
+		pinSimSpeed(speed == "max" and MAX_SIM_SPEED or tonumber(speed) or 1)
 		speedStart = { name = current.name, frame = Spring.GetGameFrame(), timer = Spring.GetTimer() }
 	end
 	local ctx = makeCtx(current)

@@ -69,6 +69,14 @@ class PrepareCell(unittest.TestCase):
             with open(cmd[cmd.index("--config") + 1]) as f:
                 self.assertIn("WorkbenchFilter = corsiegebreaker,armp*", f.read().splitlines())
 
+    def test_sim_speed_override_is_written_into_the_cell_config(self):
+        with tempfile.TemporaryDirectory() as out:
+            args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--only", "x",
+                                   "--sim-speed", "max"])
+            cell_dir, cmd = run.prepare_cell(run.Cell("dev", sys.executable, "default", 0), args, out)
+            with open(cmd[cmd.index("--config") + 1]) as f:
+                self.assertIn("WorkbenchSimSpeed = max", f.read().splitlines())
+
     def test_no_filter_leaves_the_config_as_the_profile(self):
         with tempfile.TemporaryDirectory() as out:
             args = run.parse_args(["--engine", "dev=" + sys.executable, "--data-dir", out, "--only", "x"])

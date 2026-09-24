@@ -140,10 +140,16 @@ def prepare_cell(cell, args, out_root, scenarios=None, write_dir=None, shard_nam
     # the engine writes settings back into its --config file, so give each cell its own copy
     config_path = os.path.join(cell_dir, "springsettings.cfg")
     shutil.copyfile(os.path.join(HERE, "profiles", cell.profile + ".cfg"), config_path)
+    extra = {}
     if args.filter:
         # generated scenarios (one case per unit type, ...) only run cases matching these globs
+        extra["WorkbenchFilter"] = args.filter
+    if args.sim_speed:
+        # every scenario at this sim speed ("max" or a factor), e.g. to profile the sim flat out
+        extra["WorkbenchSimSpeed"] = args.sim_speed
+    if extra:
         with open(config_path, "a", encoding="utf-8") as f:
-            f.write(f"\nWorkbenchFilter = {args.filter}\n")
+            f.write("\n" + "".join(f"{k} = {v}\n" for k, v in extra.items()))
 
     cmd = [
         cell.exe,
@@ -256,6 +262,8 @@ def parse_args(argv):
     p.add_argument("--profile", action="append", default=None, help="settings profile name (repeatable)")
     p.add_argument("--filter", default=None,
                    help="case name globs for generated scenarios, e.g. a unit name (comma separated)")
+    p.add_argument("--sim-speed", default=None,
+                   help="run every scenario at this sim speed ('max' or a factor); timings are then not real-time")
     p.add_argument("--reps", type=int, default=1)
     p.add_argument("--jobs", type=int, default=1,
                    help="engine instances per cell, each running a share of the scenarios (logic suites; "
