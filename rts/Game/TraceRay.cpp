@@ -564,7 +564,9 @@ bool TestCone(
 	// TestConeHelper is a pure function of (from, dir, length, spread, object
 	// state); an object spanning multiple quads gives the same result each
 	// time it is tested, so skipping repeat tests (via tempNum) cannot change
-	// whether/where this function returns true
+	// whether/where this function returns true.
+	// Synced and single-threaded only: gs->tempNum and each object's tempNum are shared
+	// state, so calling this from parallel weapon updates would race and desync.
 	const int tempNum = gs->GetTempNum();
 
 	for (const int quadIdx: *qfQuery.quads) {
