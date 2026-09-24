@@ -140,10 +140,9 @@ bool HasThreads() { return !workerThreads[false].empty(); }
 
 static bool DoTask(int tid, bool async)
 {
-	#ifndef UNIT_TEST
-	SCOPED_MT_TIMER("ThreadPool::RunTask");
-	#endif
-
+	// no per-task timer here: with the profiler enabled every one of the thousands of tiny
+	// tasks per frame took the global profile lock twice (7% of all samples in a 6,750-unit
+	// battle, mostly lock contention); AddTask and WaitFor are still timed per group
 	ITaskGroup* tg = nullptr;
 
 	// any external thread calling WaitForFinished will have
