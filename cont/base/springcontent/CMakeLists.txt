@@ -116,6 +116,7 @@ list(APPEND FILES
 	LuaGadgets/gadgets.lua
 	workbench/harness.lua
 	workbench/scenarios/api_selftest.lua
+	workbench/scenarios/lua_api_regressions.lua
 	workbench/scenarios/render_baseline.lua
 	LuaHandler/config.lua
 	LuaHandler/doc/gpl-2.0.txt

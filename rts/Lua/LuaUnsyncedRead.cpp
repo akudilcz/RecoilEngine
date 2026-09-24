@@ -2071,6 +2071,10 @@ public:
 // per-draw-frame cache of the last computed GetVisibleUnits() result, keyed
 // on every input that can affect it; this only saves the C++-side scan, each
 // call still builds and returns its own fresh Lua table (same contents/order)
+static bool visibleUnitsCacheValid = false;
+
+void LuaUnsyncedRead::InvalidateVisibleUnitsCache() { visibleUnitsCacheValid = false; }
+
 struct GetVisibleUnitsCacheKey {
 	unsigned int drawFrame = 0;
 	int simFrame = 0; // units can be created/destroyed/change LOS between draw frames
@@ -2176,9 +2180,8 @@ int LuaUnsyncedRead::GetVisibleUnits(lua_State* L)
 
 	static GetVisibleUnitsCacheKey cacheKey;
 	static std::vector<int> cachedUnitIDs;
-	static bool cacheValid = false;
 
-	if (!cacheValid || !(cacheKey == key)) {
+	if (!visibleUnitsCacheValid || !(cacheKey == key)) {
 		static CVisUnitQuadDrawer unitQuadIter;
 
 		unitQuadIter.ResetState();
@@ -2226,7 +2229,7 @@ int LuaUnsyncedRead::GetVisibleUnits(lua_State* L)
 		}
 
 		cacheKey = key;
-		cacheValid = true;
+		visibleUnitsCacheValid = true;
 	}
 
 	lua_createtable(L, cachedUnitIDs.size(), 0);
