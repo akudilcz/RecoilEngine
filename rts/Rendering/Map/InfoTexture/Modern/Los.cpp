@@ -1,7 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "Los.h"
-#include "InfoTextureUpdate.h"
 #include "Game/GlobalUnsynced.h"
 #include "Rendering/GlobalRendering.h"
 #include "Rendering/Shaders/ShaderHandler.h"
@@ -87,14 +86,23 @@ CLosTexture::~CLosTexture()
 bool CLosTexture::IsUpdateNeeded()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (!everUpdated)
+		return true;
+
+	// don't bother refreshing textures nobody has sampled recently (e.g. an
+	// info-texture mode that isn't currently active/composited); GetTexture()
+	// force-updates on demand, so this can never hand out stale data.
+	if ((spring_gettime() - lastUsage).toSecsi() > 2)
+		return false;
+
 	const bool globalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
 
-	return InfoTextureUpdate::NeedsUpdate({
-		everUpdated, (spring_gettime() - lastUsage).toSecsi(),
-		globalLos, lastGlobalLos,
-		gu->myAllyTeam, lastAllyTeam,
-		!globalLos && (losHandler->los.losMaps[gu->myAllyTeam].GetChangeCounter() != lastLosCounter),
-	});
+	if (globalLos != lastGlobalLos)
+		return true;
+	if (globalLos)
+		return false;
+
+	return (losHandler->los.losMaps[gu->myAllyTeam].GetChangeCounter() != lastLosCounter);
 }
 
 
@@ -116,7 +124,6 @@ void CLosTexture::Update()
 	RECOIL_DETAILED_TRACY_ZONE;
 	everUpdated = true;
 	lastGlobalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
-	lastAllyTeam = gu->myAllyTeam;
 
 	if (lastGlobalLos) {
 		fbo.Bind();

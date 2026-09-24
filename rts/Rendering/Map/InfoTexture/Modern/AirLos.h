@@ -29,7 +29,6 @@ private:
 
 	bool everUpdated = false;
 	bool lastGlobalLos = false;
-	int lastAllyTeam = -1; // the counters are per ally team: a switch must force an update
 	unsigned int lastAirLosCounter = 0;
 	spring_time lastUsage;
 };

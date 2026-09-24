@@ -1,7 +1,6 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "Radar.h"
-#include "InfoTextureUpdate.h"
 #include "InfoTextureHandler.h"
 #include "Game/GlobalUnsynced.h"
 #include "Rendering/GlobalRendering.h"
@@ -108,15 +107,26 @@ static inline int RadarJammerAllyTeam()
 bool CRadarTexture::IsUpdateNeeded()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	if (!everUpdated)
+		return true;
+
+	// don't bother refreshing textures nobody has sampled recently (e.g. an
+	// info-texture mode that isn't currently active/composited); GetTexture()
+	// force-updates on demand, so this can never hand out stale data.
+	if ((spring_gettime() - lastUsage).toSecsi() > 2)
+		return false;
+
 	const bool globalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
 
-	return InfoTextureUpdate::NeedsUpdate({
-		everUpdated, (spring_gettime() - lastUsage).toSecsi(),
-		globalLos, lastGlobalLos,
-		gu->myAllyTeam, lastAllyTeam,
-		!globalLos && ((losHandler->radar.losMaps[gu->myAllyTeam].GetChangeCounter() != lastRadarCounter) ||
-		(losHandler->jammer.losMaps[RadarJammerAllyTeam()].GetChangeCounter() != lastJammerCounter)),
-	});
+	if (globalLos != lastGlobalLos)
+		return true;
+	if (globalLos)
+		return false;
+
+	const int jammerAllyTeam = RadarJammerAllyTeam();
+
+	return (losHandler->radar.losMaps[gu->myAllyTeam].GetChangeCounter() != lastRadarCounter) ||
+	       (losHandler->jammer.losMaps[jammerAllyTeam].GetChangeCounter() != lastJammerCounter);
 }
 
 
@@ -138,7 +148,6 @@ void CRadarTexture::Update()
 	RECOIL_DETAILED_TRACY_ZONE;
 	everUpdated = true;
 	lastGlobalLos = losHandler->GetGlobalLOS(gu->myAllyTeam);
-	lastAllyTeam = gu->myAllyTeam;
 
 	if (lastGlobalLos) {
 		fbo.Bind();

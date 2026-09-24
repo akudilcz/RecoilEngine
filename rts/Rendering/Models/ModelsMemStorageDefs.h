@@ -31,7 +31,7 @@ public:
 
 	float maxHealth;
 	float health;
-	float buildProgress = 1.0f; // was unused6; [0,1] for units under construction, 1.0f otherwise (e.g. features)
+	float buildProgress; // was unused6; [0,1] for units under construction, 1.0f otherwise (e.g. features)
 	float modelDrawHeight; // was unused7; unit->model->CalcDrawHeight(), only meaningful together with buildProgress
 
 	float4 drawPos;
