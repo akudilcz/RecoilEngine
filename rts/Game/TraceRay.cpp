@@ -192,6 +192,47 @@ inline static bool TestTrajectoryConeHelper(
 namespace TraceRay {
 
 // called by {CRifle, CBeamLaser, CLightningCannon}::Fire(), CWeapon::HaveFreeLineOfFire(), and Skirmish AIs
+// false if a collision volume with bounding sphere (<c>, <r>) cannot touch the segment
+// [p0, p0 + seg]. Exact as long as ray hits only count on the segment (none behind its
+// start; see IntersectCylinder). Saves the full volume transform and hit test for most
+// objects in the quads along a ray.
+static bool SphereNearSegment(const float3& c, float r, const float3& p0, const float3& seg)
+{
+	const float segLenSq = seg.SqLength();
+	const float t = (segLenSq > 0.0f)? std::clamp((c - p0).dot(seg) / segLenSq, 0.0f, 1.0f): 0.0f;
+
+	return (c.SqDistance(p0 + seg * t) <= r * r);
+}
+
+// units: the volume's centre is pos + (relMidPos + offsets) in the transform matrix's frame,
+// midPos is pos + relMidPos in the unit's frame, and those two frames mirror x (-rightdir vs
+// rightdir), so test around midPos, widened by 2|relMidPos.x| plus the offsets (building the
+// matrix is what this check saves)
+static bool VolumeNearSegment(const CUnit* u, const float3& p0, const float3& seg)
+{
+	const CollisionVolume& v = u->collisionVolume;
+
+	// a piece tree can reach past the unit's own volume
+	if (v.DefaultToPieceTree())
+		return true;
+
+	const float r = v.GetBoundingRadius() + v.GetOffsets().Length() + 2.0f * math::fabs(u->relMidPos.x) + 1.0f;
+	return (SphereNearSegment(u->midPos, r, p0, seg));
+}
+
+// features: their stored matrix is cheap to read and its frame differs from midPos's in more
+// than x, so place the centre exactly as CCollisionHandler::Intersect does
+static bool VolumeNearSegment(const CFeature* f, const float3& p0, const float3& seg)
+{
+	const CollisionVolume& v = f->collisionVolume;
+
+	if (v.DefaultToPieceTree())
+		return true;
+
+	const float3 c = f->GetTransformMatrixRef(true).Mul(float3(f->relMidPos) + v.GetOffsets());
+	return (SphereNearSegment(c, v.GetBoundingRadius() + 1.0f, p0, seg));
+}
+
 float TraceRay(const float3& p, const float3& d, float l, int f, const CUnit* o, CUnit*& hu, CFeature*& hf, CollisionQuery* cq)
 {
 	assert(o != nullptr);
@@ -264,6 +305,8 @@ float TraceRay(
 					//   for collisions with projectiles so we can skip it here
 					if (!f->HasCollidableStateBit(CSolidObject::CSTATE_BIT_QUADMAPRAYS))
 						continue;
+					if (!VolumeNearSegment(f, pos, dir * traceLength))
+						continue;
 
 					if (CCollisionHandler::DetectHit(f, f->GetTransformMatrix(true), pos, pos + dir * traceLength, &cq, true)) {
 						const float len = cq.GetHitPosDist(pos, dir);
@@ -303,6 +346,8 @@ float TraceRay(
 					doHitTest |= (scanForCloaked  && u->IsCloaked());
 
 					if (!doHitTest)
+						continue;
+					if (!VolumeNearSegment(u, pos, dir * traceLength))
 						continue;
 
 					if (CCollisionHandler::DetectHit(u, u->GetTransformMatrix(true), pos, pos + dir * traceLength, &cq, true)) {
