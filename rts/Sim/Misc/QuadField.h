@@ -241,6 +241,20 @@ private:
 	std::array< QueryVectorCache<CSolidObject*>, ThreadPool::MAX_THREADS > tempSolids;
 	std::array< QueryVectorCache<int>, ThreadPool::MAX_THREADS > tempQuads;
 
+	// Per-thread "already visited in this query" stamps, indexed by object id (units and
+	// features separately, their ids overlap). They used to live in each object
+	// (CWorldObject::mtTempNum): the first touch of every candidate was a store into a cache
+	// line of a shared object that other threads' queries also wrote their own stamps into,
+	// and that load/store was ~60% of GetUnitsExact's cycles with thousands of moving units.
+	std::array< std::vector<int>, ThreadPool::MAX_THREADS > unitStamps;
+	std::array< std::vector<int>, ThreadPool::MAX_THREADS > featureStamps;
+
+	static int& Stamp(std::vector<int>& stamps, int id) {
+		if (static_cast<size_t>(id) >= stamps.size())
+			stamps.resize(id + 1024, 0);
+		return stamps[id];
+	}
+
 	float2 invQuadSize;
 
 	int numQuadsX;

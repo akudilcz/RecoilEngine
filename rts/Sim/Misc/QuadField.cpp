@@ -622,10 +622,11 @@ void CQuadField::GetUnits(QuadFieldQuery& qfq, const float3& pos, float radius)
 
 	for (const int qi: *qfQuery.quads) {
 		for (CUnit* u: baseQuads[qi].units) {
-			if (u->mtTempNum[curThread] == tempNum)
+			int& uStamp = Stamp(unitStamps[curThread], u->id);
+			if (uStamp == tempNum)
 				continue;
 
-			u->mtTempNum[curThread] = tempNum;
+			uStamp = tempNum;
 			qfq.units->push_back(u);
 		}
 	}
@@ -645,10 +646,11 @@ void CQuadField::GetUnitsExact(QuadFieldQuery& qfq, const float3& pos, float rad
 
 	for (const int qi: *qfQuery.quads) {
 		for (CUnit* u: baseQuads[qi].units) {
-			if (u->mtTempNum[curThread] == tempNum)
+			int& uStamp = Stamp(unitStamps[curThread], u->id);
+			if (uStamp == tempNum)
 				continue;
 
-			u->mtTempNum[curThread] = tempNum;
+			uStamp = tempNum;
 
 			const float totRad       = radius + u->radius;
 			const float totRadSq     = totRad * totRad;
@@ -679,10 +681,11 @@ void CQuadField::GetUnitsExact(QuadFieldQuery& qfq, const float3& mins, const fl
 	for (const int qi: *qfQuery.quads) {
 		for (CUnit* unit: baseQuads[qi].units) {
 
-			if (unit->mtTempNum[curThread] == tempNum)
+			int& unitStamp = Stamp(unitStamps[curThread], unit->id);
+			if (unitStamp == tempNum)
 				continue;
 
-			unit->mtTempNum[curThread] = tempNum;
+			unitStamp = tempNum;
 
 			const float3& pos = unit->pos;
 			if (pos.x < mins.x || pos.x > maxs.x)
@@ -710,10 +713,11 @@ void CQuadField::GetFeaturesExact(QuadFieldQuery& qfq, const float3& pos, float 
 
 	for (const int qi: *qfQuery.quads) {
 		for (CFeature* f: baseQuads[qi].features) {
-			if (f->mtTempNum[curThread] == tempNum)
+			int& fStamp = Stamp(featureStamps[curThread], f->id);
+			if (fStamp == tempNum)
 				continue;
 
-			f->mtTempNum[curThread] = tempNum;
+			fStamp = tempNum;
 
 			const float totRad       = radius + f->radius;
 			const float totRadSq     = totRad * totRad;
@@ -743,10 +747,11 @@ void CQuadField::GetFeaturesExact(QuadFieldQuery& qfq, const float3& mins, const
 
 	for (const int qi: *qfQuery.quads) {
 		for (CFeature* feature: baseQuads[qi].features) {
-			if (feature->mtTempNum[curThread] == tempNum)
+			int& featureStamp = Stamp(featureStamps[curThread], feature->id);
+			if (featureStamp == tempNum)
 				continue;
 
-			feature->mtTempNum[curThread] = tempNum;
+			featureStamp = tempNum;
 
 			const float3& pos = feature->pos;
 			if (pos.x < mins.x || pos.x > maxs.x)
@@ -836,10 +841,11 @@ void CQuadField::GetSolidsExact(
 
 	for (const int qi: *qfQuery.quads) {
 		for (CUnit* u: baseQuads[qi].units) {
-			if (u->mtTempNum[curThread] == tempNum)
+			int& uStamp = Stamp(unitStamps[curThread], u->id);
+			if (uStamp == tempNum)
 				continue;
 
-			u->mtTempNum[curThread] = tempNum;
+			uStamp = tempNum;
 
 			if (!u->HasPhysicalStateBit(physicalStateBits))
 				continue;
@@ -852,10 +858,11 @@ void CQuadField::GetSolidsExact(
 		}
 
 		for (CFeature* f: baseQuads[qi].features) {
-			if (f->mtTempNum[curThread] == tempNum)
+			int& fStamp = Stamp(featureStamps[curThread], f->id);
+			if (fStamp == tempNum)
 				continue;
 
-			f->mtTempNum[curThread] = tempNum;
+			fStamp = tempNum;
 
 			if (!f->HasPhysicalStateBit(physicalStateBits))
 				continue;
