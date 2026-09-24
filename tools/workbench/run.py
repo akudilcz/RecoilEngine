@@ -19,9 +19,9 @@ Cell = collections.namedtuple("Cell", "engine exe profile rep")
 # named scenario sets; --only overrides
 SUITES = {
     "smoke": "api_selftest,lua_api_regressions,render_baseline,mass_move_500,weapon_range,ui_lowfps",   # ~2 min
-    "standard": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",
+    "standard": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,ui_lategame,unit_movement,ship_movement,unit_behaviours,air_attack",
     "determinism": "sync_repro",  # use with --spectate --seed N
-    "full": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",  # hours
+    "full": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,ui_lategame,ui_lategame_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",  # hours
     "render": "render_baseline,mass_move_500",  # graphics cost per settings profile
     # every generated game-logic check, at max sim speed (~3.5 min)
     "logic": "unit_behaviours,unit_movement,ship_movement,air_attack,weapon_range_all",
