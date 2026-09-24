@@ -40,6 +40,8 @@ bool CubeMapHandler::Init() {
 	specTexFaceBuf.resize(specTexSize * specTexSize * 4, 0);
 
 	currReflectionFace = 0;
+	// the handler outlives a game: a new cubemap must be rendered before any skip
+	reflectionCycleValid = false;
 	specularTexIter = 0;
 
 	mapSkyReflections = (!mapInfo->smf.skyReflectModTexName.empty());
