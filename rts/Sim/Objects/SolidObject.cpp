@@ -61,6 +61,7 @@ CR_REG_METADATA(CSolidObject,
 
 	CR_MEMBER(localModel),
 	CR_MEMBER(collisionVolume),
+	CR_IGNORED(colTransformCache),
 	CR_MEMBER(selectionVolume), // unsynced, could also be ignored
 	CR_MEMBER(hitModelPieces),
 

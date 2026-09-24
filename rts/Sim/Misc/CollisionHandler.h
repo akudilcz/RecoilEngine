@@ -159,6 +159,7 @@ class CCollisionHandler {
 		 * @param p1 end of ray (in world-coordinates)
 		 */
 		static bool Intersect(const CollisionVolume* v, const CMatrix44f& m, const float3& p0, const float3& p1, CollisionQuery* cq);
+		static bool Intersect(const CollisionVolume* v, const CMatrix44f& m, const CMatrix44f& mInv, const float3& p0, const float3& p1, CollisionQuery* cq);
 		static bool IntersectPieceTree(const CSolidObject* o, const CMatrix44f& m, const float3& p0, const float3& p1, CollisionQuery* cq);
 		static bool IntersectPiecesHelper(const CSolidObject* o, const CMatrix44f& m, const float3& p0, const float3& p1, CollisionQuery* cqp);
 

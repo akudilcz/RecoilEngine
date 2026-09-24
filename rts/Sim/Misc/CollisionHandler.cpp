@@ -1,12 +1,16 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "CollisionHandler.h"
+
+#include <cstring>
+
 #include "CollisionVolume.h"
 #include "Map/ReadMap.h" // mapDims
 #include "Sim/Misc/GroundBlockingObjectMap.h"
 #include "Sim/Misc/GlobalConstants.h"
 #include "Sim/Objects/SolidObject.h"
 #include "System/Matrix44f.h"
+#include "System/Platform/Threading.h"
 #include "System/Log/ILog.h"
 
 #include "System/Misc/TracyDefs.h"
@@ -345,20 +349,50 @@ inline bool CCollisionHandler::Intersect(
 	// to midPos because GetTransformMatrix() only uses pos
 	// for all CSolidObject types
 	//
+	const float3 relMid = o->relMidPos * s;
+	const float3 offsets = v->GetOffsets();
+
+	// reuse the object's cached volume transform and inverse when every input is bitwise
+	// the same as last time (the same ops on the same inputs give the same result, so this
+	// cannot change hit tests); only on the main thread, where all synced hit tests run
+	if (Threading::IsMainThread()) {
+		auto& c = o->colTransformCache;
+
+		if (!c.valid || std::memcmp(&c.in, &m, sizeof(m)) != 0 ||
+		    std::memcmp(&c.relMidPos, &relMid, sizeof(relMid)) != 0 ||
+		    std::memcmp(&c.offsets, &offsets, sizeof(offsets)) != 0) {
+			c.in = m;
+			c.relMidPos = relMid;
+			c.offsets = offsets;
+			c.vol = m;
+			c.vol.Translate(relMid);
+			c.vol.Translate(offsets);
+			c.volInv = c.vol.InvertAffine();
+			c.valid = true;
+		}
+
+		return (CCollisionHandler::Intersect(v, c.vol, c.volInv, p0, p1, cq));
+	}
+
 	CMatrix44f mr = m;
 
-	mr.Translate(o->relMidPos * s);
-	mr.Translate(v->GetOffsets());
+	mr.Translate(relMid);
+	mr.Translate(offsets);
 
 	return (CCollisionHandler::Intersect(v, mr, p0, p1, cq));
 }
 
 bool CCollisionHandler::Intersect(const CollisionVolume* v, const CMatrix44f& m, const float3& p0, const float3& p1, CollisionQuery* q)
 {
+	return (CCollisionHandler::Intersect(v, m, m.InvertAffine(), p0, p1, q));
+}
+
+// m: volume-space transform, mInv: its inverse
+bool CCollisionHandler::Intersect(const CollisionVolume* v, const CMatrix44f& m, const CMatrix44f& mInv, const float3& p0, const float3& p1, CollisionQuery* q)
+{
 	RECOIL_DETAILED_TRACY_ZONE;
 	numContTests += 1;
 
-	const CMatrix44f mInv = m.InvertAffine();
 	const float3 pi0 = mInv.Mul(p0);
 	const float3 pi1 = mInv.Mul(p1);
 	bool intersect = false;

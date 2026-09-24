@@ -406,6 +406,21 @@ public:
 	CollisionVolume collisionVolume;
 	CollisionVolume selectionVolume;
 
+	// CCollisionHandler's cache of the last ray-test transform: a weapon checking line of
+	// fire (or a target search) casts many rays against the same object while it hasn't
+	// moved, and building + inverting the volume transform per ray was ~16% of battle CPU.
+	// Keyed on the exact inputs (bitwise), so a hit returns what recomputing would.
+	// Not serialized; main thread only.
+	struct CollisionTransformCache {
+		CMatrix44f in;       // transform passed to the hit test
+		float3 relMidPos;    // relMidPos * scale applied to it
+		float3 offsets;      // then the volume offsets
+		CMatrix44f vol;      // the resulting volume-space transform
+		CMatrix44f volInv;   // and its inverse
+		bool valid = false;
+	};
+	mutable CollisionTransformCache colTransformCache;
+
 	///< pieces that were last hit by a {[0] := unsynced, [1] := synced} projectile
 	const LocalModelPiece* hitModelPieces[2];
 
