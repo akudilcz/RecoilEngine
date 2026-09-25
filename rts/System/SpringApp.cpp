@@ -959,6 +959,9 @@ int SpringApp::Run()
 			Watchdog::ClearTimer(WDT_MAIN);
 			input.PushEvents();
 
+			if (mouseInput != nullptr)
+				mouseInput->DeliverExpiredReleases();
+
 			// move to clear global data if a save is queued
 			ILoadSaveHandler::CreateSave(std::move(globalSaveFileData));
 

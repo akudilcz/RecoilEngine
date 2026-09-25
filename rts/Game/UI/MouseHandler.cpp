@@ -66,6 +66,7 @@ CONFIG(float, DoubleClickTime).defaultValue(200.0f).description("Double click ti
 CONFIG(float, ScrollWheelSpeed).defaultValue(-25.0f).minimumValue(-255.f).maximumValue(255.f);
 
 CONFIG(float, MouseDragScrollThreshold).defaultValue(0.3f);
+CONFIG(int, MouseDragReleaseDebounce).defaultValue(60).minimumValue(0).description("Milliseconds a mouse button release that ends a drag is held back; a press of the same button within this window is treated as switch bounce and the drag continues. 0 disables.");
 CONFIG(int, MouseDragSelectionThreshold).defaultValue(4).description("Distance in pixels which the mouse must be dragged to trigger a selection box.");
 CONFIG(int, MouseDragCircleCommandThreshold).defaultValue(4).description("Distance in pixels which the mouse must be dragged to trigger a circular area command.");
 CONFIG(int, MouseDragBoxCommandThreshold).defaultValue(16).description("Distance in pixels which the mouse must be dragged to trigger a rectangular area command.");
@@ -129,7 +130,7 @@ void CMouseHandler::InitStatic()
 	assert(mouse == nullptr);
 	assert(mouseInput == nullptr);
 
-	mouseInput = IMouseInput::GetInstance(configHandler->GetBool("MouseRelativeModeWarp"));
+	mouseInput = IMouseInput::GetInstance(configHandler->GetBool("MouseRelativeModeWarp"), configHandler->GetInt("MouseDragReleaseDebounce"));
 	mouse = new CMouseHandler();
 }
 

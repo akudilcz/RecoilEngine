@@ -16,6 +16,22 @@
 	newer:
 	SDL_Event struct is used for new input handling.
 	Several people confirmed its working.
+
+	Drag release debounce (MouseDragReleaseDebounce, milliseconds, 0 = off):
+	a worn or bouncing mouse switch briefly opens while the button is held,
+	which SDL reports as a release followed tens of milliseconds later by a
+	press. Mid-drag that ends the box select / build line / formation early
+	and starts a new drag from the current position. Such a release is held
+	back for the debounce window; a press of the same button inside the
+	window cancels both, so the drag continues. If the window runs out, the
+	release is delivered at the position and with the button state it had.
+	Only releases that end a drag (movement past MouseDragSelectionThreshold)
+	are held: clicks and double-clicks keep zero added latency, which matters
+	because a human double-click can have the same ~30 ms up-to-down gap as a
+	bounce. This is libinput's "button losing contact while being held down"
+	case (src/libinput-plugin-button-debounce.c, case 4.1), gated on drag
+	movement instead of on a learned per-device bounce pattern, since the same
+	switches misbehave on Windows where no such filter exists.
 */
 
 
@@ -26,6 +42,7 @@
 #include "Rendering/GlobalRendering.h"
 #include "System/MainDefines.h"
 #include "System/SafeUtil.h"
+#include "System/Log/ILog.h"
 
 #include <SDL_events.h>
 #include <SDL_hints.h>
@@ -34,7 +51,9 @@
 
 IMouseInput* mouseInput = nullptr;
 
-IMouseInput::IMouseInput(bool relModeWarp)
+IMouseInput::IMouseInput(bool relModeWarp, int dragReleaseDebounceMs)
+	: pendingReleases(NUM_BUTTONS + 1)
+	, dragReleaseDebounce(spring_msecs(dragReleaseDebounceMs))
 {
 	inputCon = input.AddHandler([this](const SDL_Event& event) { return this->HandleSDLMouseEvent(event); });
 	#ifndef HEADLESS
@@ -74,18 +93,38 @@ bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 		} break;
 		case SDL_MOUSEBUTTONDOWN: {
 			mousepos = int2(event.button.x, event.button.y);
+			const int button = event.button.button;
+
+			// switch bounce: the held-back release and this press never happened
+			if (button <= NUM_BUTTONS && pendingReleases[button].active) {
+				pendingReleases[button].active = false;
+				LOG("[MouseInput] debounced release+press of mouse button %d during a drag", button);
+				break;
+			}
 
 			// suppress if the button is already held via input emulation
-			if (mouse != nullptr && !mouse->IsButtonEmulated(event.button.button))
-				mouse->MousePress(mousepos.x, mousepos.y, event.button.button);
+			if (mouse != nullptr && !mouse->IsButtonEmulated(button))
+				mouse->MousePress(mousepos.x, mousepos.y, button);
 
 		} break;
 		case SDL_MOUSEBUTTONUP: {
 			mousepos = int2(event.button.x, event.button.y);
+			const int button = event.button.button;
 
-			if (mouse != nullptr && !mouse->IsButtonEmulated(event.button.button))
-				mouse->MouseRelease(mousepos.x, mousepos.y, event.button.button);
+			if (mouse == nullptr || mouse->IsButtonEmulated(button))
+				break;
 
+			const bool endsDrag =
+				button <= NUM_BUTTONS &&
+				mouse->buttons[button].pressed &&
+				mouse->buttons[button].movement > mouse->dragSelectionThreshold;
+
+			if (endsDrag && dragReleaseDebounce > spring_notime) {
+				pendingReleases[button] = {true, mousepos, spring_gettime() + dragReleaseDebounce};
+				break;
+			}
+
+			mouse->MouseRelease(mousepos.x, mousepos.y, button);
 		} break;
 		case SDL_MOUSEWHEEL: {
 			if (mouse != nullptr)
@@ -113,6 +152,23 @@ bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 	}
 
 	return false;
+}
+
+void IMouseInput::DeliverExpiredReleases()
+{
+	const spring_time now = spring_gettime();
+
+	for (int button = 1; button <= NUM_BUTTONS; ++button) {
+		PendingRelease& pending = pendingReleases[button];
+
+		if (!pending.active || now < pending.deadline)
+			continue;
+
+		pending.active = false;
+
+		if (mouse != nullptr)
+			mouse->MouseRelease(pending.pos.x, pending.pos.y, button);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -167,7 +223,7 @@ public:
 		}
 	}
 
-	CWin32MouseInput(bool relModeWarp): IMouseInput(relModeWarp)
+	CWin32MouseInput(bool relModeWarp, int dragReleaseDebounceMs): IMouseInput(relModeWarp, dragReleaseDebounceMs)
 	{
 		inst = this;
 		hCursor = nullptr;
@@ -243,13 +299,13 @@ bool IMouseInput::WarpPos(int2 pos)
 
 
 
-IMouseInput* IMouseInput::GetInstance(bool relModeWarp)
+IMouseInput* IMouseInput::GetInstance(bool relModeWarp, int dragReleaseDebounceMs)
 {
 	if (mouseInput == nullptr) {
 #if defined(_WIN32) && !defined(HEADLESS)
-		mouseInput = new (mouseInputMem) CWin32MouseInput(relModeWarp);
+		mouseInput = new (mouseInputMem) CWin32MouseInput(relModeWarp, dragReleaseDebounceMs);
 #else
-		mouseInput = new (mouseInputMem) IMouseInput(relModeWarp);
+		mouseInput = new (mouseInputMem) IMouseInput(relModeWarp, dragReleaseDebounceMs);
 #endif
 	}
 
