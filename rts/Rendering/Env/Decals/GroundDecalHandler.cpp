@@ -76,6 +76,7 @@ CR_REG_METADATA(CGroundDecalHandlerData, (
 	CR_MEMBER_UN(decalShader),
 
 	CR_MEMBER(decalOwners),
+	CR_IGNORED(decalOwnerUnits),
 	CR_MEMBER(unitMinMaxHeights),
 	CR_MEMBER(idToPos),
 	CR_MEMBER(idToCmInfo),

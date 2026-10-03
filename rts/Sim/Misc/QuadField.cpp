@@ -38,6 +38,8 @@ CR_REG_METADATA(CQuadField, (
 	CR_IGNORED(tempProjectiles),
 	CR_IGNORED(tempSolids),
 	CR_IGNORED(tempQuads),
+	CR_IGNORED(unitStamps),
+	CR_IGNORED(featureStamps),
 
 	CR_POSTLOAD(PostLoad)
 ))

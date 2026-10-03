@@ -93,7 +93,7 @@ protected:
 
 	// Rendering-only cache of dynamic_cast<const CUnit*>(owner) results, keyed
 	// the same as decalOwners; avoids repeating the cast every draw/sim frame
-	// in UpdateDecalsVisibility()/GameFramePost(). Deliberately NOT a CR_MEMBER
+	// in UpdateDecalsVisibility()/GameFramePost(). CR_IGNORED, not a CR_MEMBER
 	// (decalOwners already is, and is creg-serialized as a plain size_t map;
 	// this cache is rebuilt from it in PostLoad() instead of being persisted).
 	spring::unordered_map<DecalOwner, const CUnit*, std::hash<DecalOwner>> decalOwnerUnits;
