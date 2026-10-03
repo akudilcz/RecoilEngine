@@ -482,27 +482,6 @@ namespace {
 			}
 		};
 
-		/**
-		 * Delegates filtering to CMobileCAI::IsValidTarget.
-		 *
-		 * This is necessary in CMobileCAI and CAirCAI so they can select the closest
-		 * enemy unit which they consider a valid target.
-		 *
-		 * Without the valid target condition, units don't attack anything if an
-		 * the nearest enemy is an invalid target. (e.g. noChaseCategory)
-		 */
-		struct Enemy_InLos_ValidTarget : public Enemy_InLos
-		{
-			const CMobileCAI* const cai;
-
-			Enemy_InLos_ValidTarget(int at, const CMobileCAI* cai) :
-				Enemy_InLos(nullptr, at), cai(cai) {}
-
-			bool Unit(const CUnit* u) {
-				return Enemy_InLos::Unit(u) && cai->IsValidTarget(u, nullptr);
-			}
-		};
-
 	} // end of namespace Filter
 
 
@@ -686,11 +665,16 @@ size_t CGameHelper::GenerateWeaponTargets(const CWeapon* weapon, const CUnit* av
 
 	const bool paralyzer = (weaponDmg->paralyzeDamageTime != 0);
 
+	targets.clear();
+
+	// cheap exit for the common case of no enemies anywhere near
+	if (!quadField.MayHaveEnemyUnits(ownerPos, scanRadius, weaponOwner->allyteam))
+		return 0;
+
 	// copy on purpose since the below calls lua
 	QuadFieldQuery qfQuery;
 	quadField.GetQuads(qfQuery, ownerPos, scanRadius);
 
-	targets.clear();
 	targets.reserve(32);
 
 	const int tempNum = gs->GetTempNum();
@@ -806,10 +790,13 @@ CUnit* CGameHelper::GetClosestEnemyUnit(const CUnit* excludeUnit, const float3& 
 CUnit* CGameHelper::GetClosestValidTarget(const float3& pos, float searchRadius, int searchAllyteam, const CMobileCAI* cai)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	// Same result as QueryUnits(Filter::Enemy_InLos_ValidTarget, Query::ClosestUnit): the
-	// closest valid unit within the radius, ties going to the one visited last. But
-	// IsValidTarget (weapon ray traces; the bulk of large-battle CPU) is only evaluated
-	// nearest-first until one passes, instead of for every unit in the searched quads.
+	if (!quadField.MayHaveEnemyUnits(pos, searchRadius, searchAllyteam))
+		return nullptr;
+
+	// Same result as Query::ClosestUnit over the units CMobileCAI::IsValidTarget accepts
+	// (so CMobileCAI and CAirCAI skip e.g. noChaseCategory): the closest within the
+	// radius, ties going to the one visited last. But IsValidTarget (weapon ray traces;
+	// the bulk of large-battle CPU) is only evaluated nearest-first until one passes.
 	struct Candidate { float sqDist; int order; CUnit* unit; };
 	struct CollectInRadius : public Query::Base {
 		std::vector<Candidate>& out;
