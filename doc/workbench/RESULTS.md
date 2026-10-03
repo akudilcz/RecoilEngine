@@ -4,6 +4,17 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-10-03: upstream merge (engine to upstream 2026-10-02, game to 2026-10-03)
+
+Pre-merge engine (`57b480f`) vs merged engine (`261d926`), both on the merged game, headless, `--sim-speed max`, 3 interleaved repetitions, median sim time per frame (ms; range in brackets).
+
+| Scenario | pre-merge | merged | change |
+|---|---|---|---|
+| big_battle | 7.65 (7.60-9.42) | 6.15 (5.52-6.37) | -20% |
+| mass_move_5000 | 12.56 (12.46-12.58) | 12.06 (12.06-12.19) | -4% |
+
+Ranges don't overlap. Upstream's slow-update target search early exit (`MayHaveEnemyUnits`) and weapon-update skip of idle work, on top of our nearest-first target search, are the likely source. mass_move_5000 is slower than the 2026-09-24 table below (~10.7) on both engines: the merged game costs more there, not the engine. Logic suite, smoke suite (GUI engine), big_battle, mass_move_5000 and lategame_load: all checks pass, no log issues.
+
 ## 2026-09-24: simulation optimisations on lemon (i9-14900K, max sim speed, identical game state)
 
 Measured with `--sim-speed max` (simulation time per frame, median of interleaved runs) on the headless engine; every step keeps the game state identical (sync_repro state digests over 3,000 frames).
