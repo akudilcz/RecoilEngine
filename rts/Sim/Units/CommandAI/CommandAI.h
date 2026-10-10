@@ -51,7 +51,8 @@ public:
 	virtual void SlowUpdate();
 	void CheckForAndAttemptNewCommand();
 	virtual void GiveCommandReal(const Command& c, bool fromSynced = true);
-	virtual void FinishCommand();
+	// Complete normally, but optionally suppress requeueing when Repeat is enabled.
+	virtual void FinishCommand(bool dontRepeat = false);
 
 	virtual void BuggerOff(const float3& pos, float radius) {}
 	virtual void StopMove() {}
