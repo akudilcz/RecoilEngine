@@ -4,6 +4,25 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-10-11: community PR batch timed; COB slot store re-measured
+
+Idle machine, headless, `--sim-speed max`, 3 interleaved repetitions, mean sim time per frame (ms), median of the repetitions (range in brackets).
+
+The 2026-10-10 PR batch: **old** = the engine before it (`257bcfe`), **new** = with it (`b41079c`), same game.
+
+| Window | old | new | change |
+|---|---|---|---|
+| big_battle | 6.58 (6.34-6.69) | 6.65 (6.15-6.79) | +1% (noise) |
+| lategame_load start | 15.02 (14.99-15.03) | 14.51 (14.29-14.62) | -3% |
+| lategame_load steady | 13.10 (13.10-13.19) | 12.41 (12.29-12.51) | -5% |
+| mass_move_5000 | 11.21 (10.96-11.32) | 10.76 (10.53-10.76) | -4% |
+
+Ranges don't overlap except big_battle. Worker-thread CPU in lategame_load fell ~8% (main thread saturated at 100% on both).
+
+The COB slot store (3948e654a6, reverted on 2026-09-24 because its timing cell was disturbed), re-applied on top of **new**: replays bit-identically (`sync_repro --seed 1234 --spectate`, 2 reps each), but big_battle 6.41 -> 6.95 (+8%), lategame_load steady 12.30 -> 12.35, mass_move_5000 10.52 -> 10.76. Not carried. A profile of lategame_load on **new** no longer shows `CCobEngine::AddThread` (8.7% of the sim thread on 2026-09-24); the sim thread's self profile is flat (top entry 1.3%).
+
+Tests on the same day: standard suite (GUI engine) 552/552 once `ship_movement` stopped leaving the map flooded, logic suite 756/756 in 64 s, smoke 27/27, game Lua specs 380/380.
+
 ## 2026-10-10: community PR batch (22 engine PRs, 7 game PRs)
 
 **A** = fork master plus 11 bug-fix PRs (#3459, #3448, #3460, #3461, #3438, #3333, #3368, #3293, #3218, #3202, #3319). **B** = A plus 11 performance PRs (#3446, #3437, #3435, #3420, #3426, #3411, #3417, #3416, #3428, #3436 with #3433, #3434). Both run with the game fork plus its 7 merged game PRs. Headless, `--sim-speed max`.
