@@ -1533,6 +1533,7 @@ void CGroundDecalHandler::CompactDecalsVector(int frameNum)
 	// remove expired decals
 	decals.resize(decals.size() - numToDelete);
 	decalsUpdateList.Resize(decals.size());
+	decalsUpdateList.SetNeedUpdateAll(); // the partition moved the remaining decals
 
 	idToPos.clear();
 	for (size_t i = 0; i < decals.size(); ++i) {
