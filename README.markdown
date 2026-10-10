@@ -49,7 +49,7 @@ wsl -d Ubuntu -- bash /mnt/c/Workspace/bar/RecoilEngine/tools/workbench/deploy.s
 
 ## What gets in
 
-- **Community PRs**, one at a time after review, if they're low-to-medium risk: bug fixes, performance work, small UX improvements. No rewrites of core systems, no drafts, and no changes to default controls or balance.
+- **Community PRs**, one at a time after review, if they're low-to-medium risk: bug fixes, performance work, small UX improvements. No rewrites of core systems, no drafts, and no changes to default controls or balance. Reviews, including what was skipped and why: [doc/community-prs.md](doc/community-prs.md).
 - **Simulation changes must not change results.** They pass a replay-determinism check first.
 - **Upstream** is merged regularly (`git fetch origin && git merge origin/master`), then verified with the workbench before it's pushed.
 
