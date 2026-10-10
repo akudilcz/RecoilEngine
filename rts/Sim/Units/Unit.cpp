@@ -700,10 +700,21 @@ unsigned int CUnit::UpdateState()
 		return eventBits;
 	}
 
-	commandAI->CheckForAndAttemptNewCommand();
-
 	restTime += 1;
 	return eventBits;
+}
+
+void CUnit::AcquireQueuedCommand()
+{
+	RECOIL_DETAILED_TRACY_ZONE;
+
+	// not part of UpdateState: starting a command can run Lua callins (UnitIdle,
+	// UnitCmdDone) and touch other units, so CUnitHandler::UpdateUnits calls this
+	// serially, in unit order, after the parallel pass
+	if (beingBuilt || isDead || IsStunned())
+		return;
+
+	commandAI->CheckForAndAttemptNewCommand();
 }
 
 void CUnit::UpdateWeaponVectors()

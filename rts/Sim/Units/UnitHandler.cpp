@@ -519,11 +519,12 @@ void CUnitHandler::UpdateUnits()
 
 	// sent in unit order; flipping the changed bits back gives the previous state
 	for (size_t i = 0; i < activeUnitCount; ++i) {
-		if (physicalStateChanges[i] == 0)
-			continue;
-
 		CUnit* unit = activeUnits[i];
-		unit->SendPhysicalStateEvents(unit->physicalState ^ physicalStateChanges[i]);
+
+		if (physicalStateChanges[i] != 0)
+			unit->SendPhysicalStateEvents(unit->physicalState ^ physicalStateChanges[i]);
+
+		unit->AcquireQueuedCommand();
 	}
 }
 

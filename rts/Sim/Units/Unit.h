@@ -81,6 +81,8 @@ public:
 	// per-frame state that only depends on the unit itself, safe to run in parallel;
 	// returns the physical state bits whose events still have to be sent
 	unsigned int UpdateState();
+	// starts a queued command when the unit has none; runs Lua callins, never in parallel
+	void AcquireQueuedCommand();
 
 	const SolidObjectDef* GetDef() const override { return ((const SolidObjectDef*) unitDef); }
 
