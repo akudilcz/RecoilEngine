@@ -19,12 +19,12 @@ Cell = collections.namedtuple("Cell", "engine exe profile rep")
 # named scenario sets; --only overrides
 SUITES = {
     "smoke": "api_selftest,lua_api_regressions,render_baseline,mass_move_500,weapon_range,ui_lowfps",   # ~2 min
-    "standard": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,ui_lategame,unit_movement,ship_movement,unit_behaviours,air_attack",
+    "standard": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,ui_lategame,unit_movement,ship_movement,unit_behaviours,air_attack,engine_regressions",
     "determinism": "sync_repro",  # use with --spectate --seed N
-    "full": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,ui_lategame,ui_lategame_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack",  # hours
+    "full": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,ui_lategame,ui_lategame_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack,engine_regressions",  # hours
     "render": "render_baseline,mass_move_500",  # graphics cost per settings profile
-    # every generated game-logic check, at max sim speed (~3.5 min)
-    "logic": "unit_behaviours,unit_movement,ship_movement,air_attack,weapon_range_all",
+    # every game-logic check, at max sim speed (~1 min on lemon)
+    "logic": "unit_behaviours,unit_movement,ship_movement,air_attack,weapon_range_all,engine_regressions",
 }
 # suites that sweep settings profiles unless --profile is given
 SUITE_PROFILES = {
@@ -171,6 +171,9 @@ _ISSUE_PATTERNS = [
     ("widget_load_failed", re.compile(r"Failed to load: (\S+)\s+\((?!no GetInfo\(\) call)(.*)")),
     ("fatal", re.compile(r"\bFatal:\s*(.*)")),
     ("lua_error", re.compile(r"\[(?:LuaUI|LuaRules|LuaGaia|LuaIntro|LuaMenu)\] Error:?\s*(.*)")),
+    # engine LOG_L(L_ERROR) lines once the game runs (f >= 0; pregame config warnings are not run
+    # issues); the workbench's own errors already reach a check or the run status
+    ("engine_error", re.compile(r"^\[t=[^\]]*\]\[f=\d+\] Error: (?!\[Workbench\])(.*)")),
     # a scenario that fails to load silently drops out of glob suites; callin errors reach no check.
     # (synced function errors are not listed: they reach the scenario through ctx.call)
     ("scenario_load_failed", re.compile(r"\[Workbench\] Error: failed to load (.*)")),
@@ -180,7 +183,7 @@ _TIMESTAMP = re.compile(r"^\[t=[^\]]*\](\[f=[^\]]*\])?\s*")
 
 
 def scan_infolog(lines):
-    """Returns [(kind, message)] for widget load failures, Lua errors and fatal errors, de-duplicated."""
+    """Returns [(kind, message)] for widget load failures, Lua, engine and fatal errors, de-duplicated."""
     issues, seen = [], set()
     for line in lines:
         for kind, pattern in _ISSUE_PATTERNS:

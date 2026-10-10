@@ -20,7 +20,7 @@ python tools/workbench/run.py --suite smoke --engine dev=C:/Workspace/bar/engine
     --data-dir C:/Workspace/bar/data
 ```
 
-Suites: `smoke` (the default), `standard` (adds big battles, every ground unit's and ship's movement, every factory's and builder's production and every armed aircraft's strike), `full` (adds every armed unit's weapon range; hours), `determinism` (`sync_repro`; use with `--spectate --seed N`), `logic` (every generated game-logic check, 747 checks in ~3.5 min at max sim speed) and `render` (graphics cost across the `low`, `default` and `ultra` settings profiles; the report adds a settings-sweep table). `--only <globs>` runs any scenarios by name instead; `--profile` picks profiles explicitly; `--filter <globs>` focuses generated scenarios on some cases, e.g. `--only weapon_range_all --filter corsiegebreaker` (scenarios ask `ctx.wants(caseName)`).
+Suites: `smoke` (the default), `standard` (adds big battles, every ground unit's and ship's movement, every factory's and builder's production, every armed aircraft's strike and `engine_regressions`, the guards for carried engine fixes that need real units), `full` (adds every armed unit's weapon range; hours), `determinism` (`sync_repro`; use with `--spectate --seed N`), `logic` (every game-logic check, 756 checks in about a minute at max sim speed on lemon) and `render` (graphics cost across the `low`, `default` and `ultra` settings profiles; the report adds a settings-sweep table). `--only <globs>` runs any scenarios by name instead; `--profile` picks profiles explicitly; `--filter <globs>` focuses generated scenarios on some cases, e.g. `--only weapon_range_all --filter corsiegebreaker` (scenarios ask `ctx.wants(caseName)`).
 
 Compare two builds (the first engine is the baseline):
 
@@ -51,7 +51,7 @@ A metric only counts as a regression or improvement when its median moves by mor
 
 ## What every run checks automatically
 
-- **Log issues**: the infolog is scanned for widget load failures, Lua errors and fatal errors; they are listed in the report even when every check passes.
+- **Log issues**: the infolog is scanned for widget load failures, Lua errors, fatal errors and engine errors logged once the game runs; they are listed in the report even when every check passes.
 - **Memory**: each window records process memory at start, end and peak; growth and peak are compared against the baseline like timings.
 - **Crashes and game-ending scenarios**: an engine crash is recorded against the running scenario (no dialog is shown, so unattended runs never hang), and an engine that exits before the run finished is exit code `2`, never a silent pass. Symbolize a crash stack with
   `wsl -d Ubuntu -- bash tools/workbench/symbolize.sh /mnt/c/<engine dir> /mnt/c/<cell>/infolog.txt`.
@@ -94,7 +94,7 @@ return {
 }
 ```
 
-Game-logic scenarios should set `simSpeed = "max"`: the harness pins the sim to 100x (in practice 22-34x, CPU-bound) for that scenario and back to 1x afterwards, so performance and UI scenarios always run in real time. Such scenarios must wait in sim time (`waitSimFrames`, `waitSimSeconds`); `waitSeconds` is wall-clock. The full logic set (every ground unit's movement and range, every ship, aircraft, factory and builder: 747 checks) takes about 3.5 minutes instead of an hour.
+Game-logic scenarios should set `simSpeed = "max"`: the harness pins the sim to 100x (in practice CPU-bound: 22-34x on the original desktop, 60-75x on lemon) for that scenario and back to 1x afterwards, so performance and UI scenarios always run in real time. Such scenarios must wait in sim time (`waitSimFrames`, `waitSimSeconds`); `waitSeconds` is wall-clock. The full logic set (every ground unit's movement and range, every ship, aircraft, factory and builder, plus `engine_regressions`: 756 checks) takes about a minute on lemon (3.5 minutes on the original 14-thread desktop) instead of an hour.
 
 `ctx` API: `waitFrames(n)`, `waitSimFrames(n)`, `waitSimSeconds(s)`, `waitSeconds(s)` (wall clock), `wants(caseName)` (honours `--filter`), `waitUntil(pred, timeoutSec) -> bool`, `window(name, fn)`, `check(name, pass, detail)`, `synced(fn, ...)` (fire and forget), `call(fn, ...) -> value | nil, err` (runs a synced function and waits for its return value), `atNextGameFrame(fn)` (runs fn during the next sim step, before the GUI update; use it for emulated input that must land where physical input does), `log(msg)`.
 

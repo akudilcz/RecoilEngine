@@ -108,6 +108,16 @@ class ScanInfolog(unittest.TestCase):
         kinds = [k for k, _ in run.scan_infolog(lines)]
         self.assertEqual(kinds, ["scenario_load_failed", "scenario_callin_error"])
 
+    def test_flags_engine_errors_once_the_game_runs(self):
+        lines = [
+            "[t=1][f=-000001] Error: [SetConfigInt] key \"AdvSky\" is deprecated",
+            "[t=2][f=0002271] Error: [ResortProfilesRaw] timer with hash 2549212347 wasn't registered",
+            "[t=3][f=0002300] Error: [Workbench] run error: engine shut down before the workbench run finished",
+        ]
+        issues = run.scan_infolog(lines)
+        self.assertEqual([k for k, _ in issues], ["engine_error"])
+        self.assertIn("ResortProfilesRaw", issues[0][1])
+
     def test_duplicates_collapse(self):
         line = "[t=1][f=2] [LuaUI] Error: widget x: boom"
         self.assertEqual(len(run.scan_infolog([line, line.replace("[t=1]", "[t=9]")])), 1)
