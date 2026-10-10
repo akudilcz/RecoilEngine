@@ -2365,4 +2365,3 @@ void CUnitDrawerGL4::DrawUnitModelsBeingBuiltOpaque(const std::vector<const CUni
 
 	glPopAttrib();
 }
-
