@@ -4,6 +4,10 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-10-10: upstream merge (engine to upstream 2026-10-09, game to 2026-10-10)
+
+Merged engine (`3578122`) on the merged game, headless, `--sim-speed max`, 1 repetition. Logic suite 747/747 (`unit_movement` 346, `ship_movement` 104, `weapon_range_all` 238, `air_attack` 18, `unit_behaviours` 41), big_battle, mass_move_5000 and lategame_load: all checks pass. C++ tests 32/33 (`testUnitSync` fails on "duplicate base content", as on every lemon build). The first logic run crashed: see the 2026-10-10 entry in [the findings log](FINDINGS.md). No A/B: the machine wasn't idle, so timings aren't comparable. GUI smoke suite not yet run.
+
 ## 2026-10-03: upstream merge (engine to upstream 2026-10-02, game to 2026-10-03)
 
 Pre-merge engine (`57b480f`) vs merged engine (`261d926`), both on the merged game, headless, `--sim-speed max`, 3 interleaved repetitions, median sim time per frame (ms; range in brackets).

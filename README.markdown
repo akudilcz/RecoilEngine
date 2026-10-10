@@ -8,7 +8,7 @@ Paired with the game fork [akudilcz/Beyond-All-Reason](https://github.com/akudil
 |---|---|
 | **Tested** | 747 per-unit game-logic checks in about 3.5 minutes, plus a 2-minute smoke suite, C++ unit tests, and a bit-for-bit replay check |
 | **Measured, not assumed** | Performance claims are A/B-tested on identical seeded battles. Current result: our optimisation patches make no measurable difference yet (every scenario within run-to-run noise, 5 runs each), so the next work targets where the time really goes: unit movement and unit scripts ([results](doc/workbench/RESULTS.md)) |
-| **Fixes** | Bugs found by the testbench and code review (including two use-after-frees in our own patches and a GPU-timer hang in upstream), fixed, most with a test guarding them, plus 20 reviewed community PRs upstream hasn't merged |
+| **Fixes** | Bugs found by the testbench and code review (including two use-after-frees in our own patches and a GPU-timer hang in upstream), fixed, most with a test guarding them, plus 19 reviewed community PRs upstream hasn't merged |
 | **Same game** | Our simulation patches don't change results: a 3,000-frame seeded battle replays identically, checksum for checksum, with and without them |
 
 ## For players
