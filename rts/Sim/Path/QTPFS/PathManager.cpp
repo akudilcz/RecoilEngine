@@ -182,7 +182,9 @@ QTPFS::PathManager::PathManager() {
 	// reserve entity 0 so it can't be used picked up by a path by accident.
 	systemEntity = registry.create();
 
+	// SCOPED_MT_TIMER doesn't register its name; an unregistered one is logged as an error on every profiler resort
 	CTimeProfiler::RegisterTimer("Sim::Path::Requests");
+	CTimeProfiler::RegisterTimer("Sim::Path::RawSearches");
 
 	assert(entt::to_entity(systemEntity) == 0);
 }
