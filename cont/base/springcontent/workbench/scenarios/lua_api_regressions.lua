@@ -34,6 +34,12 @@ return {
 			for _, u in ipairs(found) do set[u] = true end
 			return (set[units[1]] and "1" or "0") .. (set[units[2]] and "1" or "0")
 		end,
+		-- different move states on the two probe units (hold position, roam)
+		mixMoveStates = function()
+			Spring.GiveOrderToUnit(units[1], CMD.MOVE_STATE, { 2 }, 0)
+			Spring.GiveOrderToUnit(units[2], CMD.MOVE_STATE, { 0 }, 0)
+			return 0
+		end,
 		clear = function()
 			for _, u in ipairs(units) do
 				if Spring.ValidUnitID(u) then Spring.DestroyUnit(u, false, true) end
@@ -77,6 +83,25 @@ return {
 		Spring.SetUnitNoDraw(near, false)
 		ctx.check("GetVisibleUnits_sees_SetUnitNoDraw", before and not after,
 			string.format("visible before %s, after SetUnitNoDraw(true) in the same frame %s", tostring(before), tostring(after)))
+
+		-- a selection whose units disagree on a mode command shows the lowest mode, and
+		-- GetActiveCmdDescs' second return lists every mode present (upstream PR #3218;
+		-- the shown mode used to depend on selection order)
+		ctx.call("mixMoveStates")
+		ctx.waitSimFrames(2)
+		Spring.SelectUnitArray({ near, tonumber(far) })
+		ctx.waitFrames(3) -- the command card is rebuilt on the next update
+		local descs, modes = Spring.GetActiveCmdDescs()
+		local shown, present
+		for i, cd in ipairs(descs or {}) do
+			if cd.id == CMD.MOVE_STATE then
+				shown = cd.params[1]
+				present = modes and table.concat(modes[i] or {}, ",")
+			end
+		end
+		Spring.SelectUnitArray({})
+		ctx.check("GetActiveCmdDescs_mixed_modes", shown == "0" and present == "0,2", string.format(
+			"move state shown %s, modes present %s (expected 0 and 0,2)", tostring(shown), tostring(present)))
 
 		ctx.call("clear")
 	end,
