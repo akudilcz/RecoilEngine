@@ -4,6 +4,18 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-10-10: community PR batch (22 engine PRs, 7 game PRs)
+
+**A** = fork master plus 11 bug-fix PRs (#3459, #3448, #3460, #3461, #3438, #3333, #3368, #3293, #3218, #3202, #3319). **B** = A plus 11 performance PRs (#3446, #3437, #3435, #3420, #3426, #3411, #3417, #3416, #3428, #3436 with #3433, #3434). Both run with the game fork plus its 7 merged game PRs. Headless, `--sim-speed max`.
+
+| Check | A | B |
+|---|---|---|
+| `sync_repro --seed 1234 --spectate`, 2 reps | digest `mRF24COb3tz7JJS2fn+acQ==` | identical over all 3,000 frames, both reps |
+| Logic suite | 747/747 | 747/747 |
+| big_battle, mass_move_5000, lategame_load | - | all pass |
+
+So the performance PRs don't change simulation results. #3438, #3333 and #3368 do change them on purpose (they're bug fixes), so A no longer replays bit-identically against upstream. Game Lua specs 375/375. Timings were taken while the machine was in use, so they're not a performance comparison.
+
 ## 2026-10-10: upstream merge (engine to upstream 2026-10-09, game to 2026-10-10)
 
 Merged engine (`3578122`) on the merged game, headless, `--sim-speed max`, 1 repetition. Logic suite 747/747 (`unit_movement` 346, `ship_movement` 104, `weapon_range_all` 238, `air_attack` 18, `unit_behaviours` 41), big_battle, mass_move_5000 and lategame_load: all checks pass. C++ tests 32/33 (`testUnitSync` fails on "duplicate base content", as on every lemon build). The first logic run crashed: see the 2026-10-10 entry in [the findings log](FINDINGS.md). Smoke suite on the installed GUI engine (after the switch): 26/26 (`ui_lowfps` 2/2, `weapon_range` 12/12, `api_selftest`, `lua_api_regressions`, `mass_move_500`, `render_baseline`). No A/B: the machine wasn't idle during the merge, so timings aren't comparable.
