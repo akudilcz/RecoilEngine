@@ -90,15 +90,7 @@ CMouseHandler::CMouseHandler()
 
 	UpdateCursorCameraDir();
 
-#ifndef __APPLE__
 	hardwareCursor = configHandler->GetBool("HardwareCursor");
-#endif
-
-	crossSize      = configHandler->GetFloat("CrossSize");
-	crossAlpha     = configHandler->GetFloat("CrossAlpha");
-	crossMoveScale = configHandler->GetFloat("CrossMoveScale") * 0.005f;
-
-	doubleClickTime = configHandler->GetFloat("DoubleClickTime") / 1000.0f;
 
 	ConfigUpdate();
 
@@ -111,6 +103,10 @@ CMouseHandler::CMouseHandler()
 		"MouseDragFrontCommandThreshold",
 		"InvertMouse",
 		"ScrollWheelSpeed",
+		"CrossSize",
+		"CrossAlpha",
+		"CrossMoveScale",
+		"DoubleClickTime",
 	});
 }
 
@@ -1216,4 +1212,10 @@ void CMouseHandler::ConfigUpdate()
 	invertMouse = configHandler->GetBool("InvertMouse");
 	miniMapMouseWheel = configHandler->GetBool("MiniMapMouseWheel");
 	scrollWheelSpeed = configHandler->GetFloat("ScrollWheelSpeed");
+
+	crossSize = configHandler->GetFloat("CrossSize");
+	crossAlpha = configHandler->GetFloat("CrossAlpha");
+	crossMoveScale = configHandler->GetFloat("CrossMoveScale") * 0.005f;
+
+	doubleClickTime = configHandler->GetFloat("DoubleClickTime") / 1000.0f;
 }

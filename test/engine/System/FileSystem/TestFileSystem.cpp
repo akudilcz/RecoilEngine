@@ -1,9 +1,11 @@
+/* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
+
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <filesystem>
-#include <thread>
 #include <string>
+#include <thread>
 #include <vector>
 #include <nowide/cstdio.hpp>
 #include <sys/stat.h>

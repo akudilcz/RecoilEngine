@@ -259,6 +259,7 @@ bool SpringApp::Init()
 
 	// populate params
 	globalConfig.Init();
+	globalConfig.InitConfigNotify();
 
 	// Install Watchdog (must happen after time epoch is set)
 	Watchdog::Install();
@@ -1092,6 +1093,8 @@ void SpringApp::Kill(bool fromRun)
 	CGlobalRendering::KillStatic();
 	CBitmap::KillPool();
 	CLuaSocketRestrictions::KillStatic();
+
+	globalConfig.RemoveConfigNotify();
 
 	// also gets rid of configHandler
 	FileSystemInitializer::Cleanup();

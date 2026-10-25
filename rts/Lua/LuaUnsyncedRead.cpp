@@ -1446,8 +1446,7 @@ int LuaUnsyncedRead::GetUnitNoSelect(lua_State* L)
  *
  * @function Spring.UnitIconGetDraw
  * @param unitID UnitID
- * @return boolean? drawIcon
- * `true` if icon is being drawn, `nil` when unitID is invalid, otherwise `false`.
+ * @return boolean? drawIcon `true` if icon is being drawn, `nil` when unitID is invalid, otherwise `false`.
  */
 int LuaUnsyncedRead::UnitIconGetDraw(lua_State* L) {
 	CUnit* unit = ParseUnit(L, __func__, 1);
@@ -5320,8 +5319,7 @@ int LuaUnsyncedRead::GetGroundDecalCreationFrame(lua_State* L)
 /***
  * @function Spring.GetGroundDecalOwner
  * @param decalID DecalID
- * @return integer? value If owner is a unit, then this is `unitID`, if owner is
- * a feature it is `featureID + MAX_UNITS`. If there is no owner, then `nil`.
+ * @return integer? value If owner is a unit, then this is `unitID`, if owner is a feature it is `featureID + MAX_UNITS`. If there is no owner, then `nil`.
  */
 int LuaUnsyncedRead::GetGroundDecalOwner(lua_State* L)
 {

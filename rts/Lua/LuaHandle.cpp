@@ -86,8 +86,6 @@ bool CLuaHandle::devMode = false;
 const int* CLuaHandle::currentCobArgs = nullptr;
 
 /***
- * @class Callins
- * 
  * Functions called by the Engine.
  *
  * To use these callins in a widget, prepend `widget:` and, for a gadget,
@@ -109,7 +107,9 @@ const int* CLuaHandle::currentCobArgs = nullptr;
  * **Attention:** Some callins will only work on the unsynced portion of the gadget.
  * Due to the type-unsafe nature of lua parsing, those callins not firing up
  * might be hard to trace.
- * 
+ *
+ * @class Callins
+ *
  * @see Gadget
  * @see Widget
  * @see Menu
@@ -4578,7 +4578,7 @@ int CLuaHandle::CallOutIsEngineMinVersion(lua_State* L)
 /***
  * @function Script.DelayByFrames
  * @param frameDelay integer
- * @param fun(...) func
+ * @param func fun(...)
  */
 int CLuaHandle::CallOutDelayByFrames(lua_State* L)
 {
