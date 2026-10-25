@@ -226,9 +226,14 @@ void CProjectileHandler::UpdateProjectilesImpl()
 	}
 	else {
 		SCOPED_TIMER("Sim::Projectiles::UpdateUnsyncedMT");
+		// Projectiles updated here can create new ones (CExpGenSpawner, CWreckProjectile smoke).
+		// AddProjectile appends to pc under CProjectile::mut, and past its reserved capacity the
+		// append reallocates while other workers read pc[i]. Update a copy of the pointers instead;
+		// new projectiles are first updated in the next frame, as before.
+		static std::vector<CProjectile*> updateList;
+		updateList = pc.GetData();
 
-		// projectiles spawned during the pass (CExpGenSpawner) are appended past numProjectiles
-		const int numProjectiles = pc.size();
+		const int numProjectiles = updateList.size();
 		const int numChunks = (numProjectiles + UNSYNCED_UPDATE_CHUNK_SIZE - 1) / UNSYNCED_UPDATE_CHUNK_SIZE;
 
 		unsyncedChunkSums.resize(numChunks);
@@ -237,7 +242,7 @@ void CProjectileHandler::UpdateProjectilesImpl()
 			UnsyncedChunkSums sums;
 
 			for (int i = chunk * UNSYNCED_UPDATE_CHUNK_SIZE, e = std::min(i + UNSYNCED_UPDATE_CHUNK_SIZE, numProjectiles); i < e; ++i) {
-				CProjectile* p = pc[i];
+				CProjectile* p = updateList[i];
 				assert(p != nullptr);
 
 				MAPPOS_SANITY_CHECK(p->pos);
