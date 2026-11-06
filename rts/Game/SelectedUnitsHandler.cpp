@@ -712,34 +712,6 @@ void CSelectedUnitsHandler::Draw()
 		shader.Disable();
 	}
 
-	// highlight queued build sites if we are about to build something
-	// (or old-style, whenever the shift key is being held down)
-	if (cmdColors.buildBox[3] > 0.0f) {
-		if (!selectedUnits.empty() &&
-				((cmdColors.BuildBoxesOnShift() && KeyInput::GetKeyModState(KMOD_SHIFT)) ||
-				 ((guihandler->inCommand >= 0) &&
-					(guihandler->inCommand < int(guihandler->commands.size())) &&
-					(guihandler->commands[guihandler->inCommand].id < 0)))) {
-
-			static std::vector<const CBuilderCAI*> myBuilderCAIs;
-			static std::vector<const CBuilderCAI*> allyBuilderCAIs;
-			myBuilderCAIs.clear();
-			allyBuilderCAIs.clear();
-
-			for (const auto& [bid, builderCAI] : unitHandler.GetBuilderCAIs()) {
-				const CUnit* builder = builderCAI->owner;
-
-				if (builder->team == gu->myTeam) {
-					myBuilderCAIs.push_back(builderCAI);
-				} else if (teamHandler.AlliedTeams(builder->team, gu->myTeam)) {
-					allyBuilderCAIs.push_back(builderCAI);
-				}
-			}
-
-			commandDrawer->DrawQuedBuildingSquares(myBuilderCAIs, allyBuilderCAIs);
-		}
-	}
-
 	glLineWidth(1.0f);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	glDisable(GL_BLEND);
@@ -1179,4 +1151,3 @@ void CSelectedUnitsHandler::SendCommandsToUnits(const std::vector<int>& unitIDs,
 
 	clientNet->Send(std::shared_ptr<netcode::RawPacket>(packet));
 }
-

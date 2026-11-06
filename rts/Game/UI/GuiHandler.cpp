@@ -23,6 +23,7 @@
 #include "Map/MapInfo.h"
 #include "Map/MetalMap.h"
 #include "Map/ReadMap.h"
+#include "Rendering/CommandDrawer.h"
 #include "Rendering/Fonts/glFont.h"
 #include "Rendering/IconHandler.h"
 #include "Rendering/Units/UnitDrawer.h"
@@ -32,8 +33,10 @@
 #include "Rendering/Textures/NamedTextures.h"
 #include "Sim/Features/Feature.h"
 #include "Sim/Misc/LosHandler.h"
+#include "Sim/Misc/TeamHandler.h"
 #include "Sim/Units/CommandAI/CommandAI.h"
 #include "Sim/Units/CommandAI/BuilderCAI.h"
+#include "Sim/Units/QueuedBuildOverlap.h"
 #include "Sim/Units/UnitDefHandler.h"
 #include "Sim/Units/Unit.h"
 #include "Sim/Units/UnitHandler.h"
@@ -2481,22 +2484,60 @@ Command CGuiHandler::GetCommand(int mouseX, int mouseY, int buttonHint, bool pre
 	return Command(CMD_STOP);
 }
 
-
-
-static bool WouldCancelAnyQueued(const BuildInfo& b)
+static bool WouldCancelAnyQueued(const BuildInfo& buildInfo)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
-	const Command c = b.CreateCommand();
+	const Command command = buildInfo.CreateCommand();
 
 	for (const int unitID: selectedUnitsHandler.selectedUnits) {
-		const CUnit* u = unitHandler.GetUnit(unitID);
+		const CUnit* unit = unitHandler.GetUnit(unitID);
 
-		if (u->commandAI->WillCancelQueued(c))
+		if (unit->commandAI->WillCancelQueued(command))
 			return true;
-
 	}
 
 	return false;
+}
+
+static void DrawQueuedBuildSquares(const CancelledBuildCommandTags& cancelledCommandTags, bool onMiniMap)
+{
+	if (cmdColors.buildBox[3] <= 0.0f || selectedUnitsHandler.selectedUnits.empty())
+		return;
+
+	const bool drawOnShift = cmdColors.BuildBoxesOnShift() && KeyInput::GetKeyModState(KMOD_SHIFT);
+	const bool activeBuildCommand =
+		guihandler->inCommand >= 0 &&
+		guihandler->inCommand < int(guihandler->commands.size()) &&
+		guihandler->commands[guihandler->inCommand].id < 0;
+
+	if (!drawOnShift && !activeBuildCommand)
+		return;
+
+	static std::vector<const CBuilderCAI*> myBuilderCAIs;
+	static std::vector<const CBuilderCAI*> allyBuilderCAIs;
+	myBuilderCAIs.clear();
+	allyBuilderCAIs.clear();
+
+	for (const auto& [builderID, builderCAI]: unitHandler.GetBuilderCAIs()) {
+		const CUnit* builder = builderCAI->owner;
+
+		if (builder->team == gu->myTeam) {
+			myBuilderCAIs.push_back(builderCAI);
+		} else if (teamHandler.AlliedTeams(builder->team, gu->myTeam)) {
+			allyBuilderCAIs.push_back(builderCAI);
+		}
+	}
+
+	glPushAttrib(GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT | GL_LINE_BIT);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glLineWidth(cmdColors.UnitBoxLineWidth());
+
+	commandDrawer->DrawQuedBuildingSquares(myBuilderCAIs, allyBuilderCAIs, cancelledCommandTags, !onMiniMap);
+
+	glPopAttrib();
 }
 
 static void FillRowOfBuildPos(const BuildInfo& startInfo, float x, float z, float xstep, float zstep, int n, int facing, bool nocancel, std::vector<BuildInfo>& ret)
@@ -3560,6 +3601,8 @@ static inline void DrawWeaponArc(const CUnit* unit)
 void CGuiHandler::DrawMapStuff(bool onMiniMap)
 {
 	RECOIL_DETAILED_TRACY_ZONE;
+	CancelledBuildCommandTags cancelledBuildCommandTags;
+
 	if (!onMiniMap) {
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask(GL_FALSE);
@@ -3852,7 +3895,6 @@ void CGuiHandler::DrawMapStuff(bool onMiniMap)
 
 				for (const BuildInfo& bi: buildInfos) {
 					const float3& buildPos = bi.pos;
-
 					DrawUnitDefRanges(nullptr, buildeeDef, buildPos);
 
 					// draw (primary) weapon range
@@ -3873,18 +3915,31 @@ void CGuiHandler::DrawMapStuff(bool onMiniMap)
 						glSurfaceCircle(buildPos, wd->coverageRange, { cmdColors.rangeInterceptorOn }, 40);
 					}
 
-					if (GetQueueKeystate()) {
-						buildCommands.clear();
+					buildCommands.clear();
+					const bool queueingBuild = GetQueueKeystate();
+					const Command c = bi.CreateCommand();
 
-						const Command c = bi.CreateCommand();
+					for (const int unitID: selectedUnitsHandler.selectedUnits) {
+						const CUnit* su = unitHandler.GetUnit(unitID);
+						const CCommandAI* cai = su->commandAI;
+						const CBuilderCAI* builderCAI = dynamic_cast<const CBuilderCAI*>(cai);
+						const std::vector<Command> overlapCommands = cai->GetOverlapQueued(c);
+						unsigned int activeBuildCommandTag = 0;
+						const bool hasActiveBuildCommand =
+							builderCAI != nullptr && builderCAI->GetCurrentBuildCommandTag(activeBuildCommandTag);
 
-						for (const int unitID: selectedUnitsHandler.selectedUnits) {
-							const CUnit* su = unitHandler.GetUnit(unitID);
-							const CCommandAI* cai = su->commandAI;
+						for (const Command& cmd: overlapCommands) {
+							if (hasActiveBuildCommand && cmd.GetTag() == activeBuildCommandTag)
+								continue;
 
-							for (const Command& cmd: cai->GetOverlapQueued(c)) {
+							// Queue obstruction affects shifted placement, while clicking an
+							// existing command can cancel it without Shift.
+							if (queueingBuild)
 								buildCommands.push_back(cmd);
-							}
+
+							const BuildInfo queuedBuild(cmd);
+							if (QueuedBuildOverlap::IsInsideCancellationRectangle(queuedBuild, bi))
+								cancelledBuildCommandTags[unitID].insert(cmd.GetTag());
 						}
 					}
 
@@ -3950,6 +4005,8 @@ void CGuiHandler::DrawMapStuff(bool onMiniMap)
 			}
 		}
 	}
+
+	DrawQueuedBuildSquares(cancelledBuildCommandTags, onMiniMap);
 
 	glLineWidth(1.0f);
 
@@ -4451,4 +4508,3 @@ void CGuiHandler::DrawSelectCircle(const float3& pos, float radius,
 
 	glEnable(GL_FOG);
 }
-

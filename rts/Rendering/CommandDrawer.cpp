@@ -653,7 +653,12 @@ void CommandDrawer::DrawDefaultCommand(const Command& c, const CUnit* owner) con
 	lineDrawer.DrawLineAndIcon(dd->cmdIconID, unit->GetObjDrawErrorPos(owner->allyteam), dd->color);
 }
 
-void CommandDrawer::DrawQuedBuildingSquares(const std::vector<const CBuilderCAI*>& myBuilderCAIs, const std::vector<const CBuilderCAI*>& allyBuilderCAIs) const
+void CommandDrawer::DrawQuedBuildingSquares(
+	const std::vector<const CBuilderCAI*>& myBuilderCAIs,
+	const std::vector<const CBuilderCAI*>& allyBuilderCAIs,
+	const CancelledBuildCommandTags& cancelledCommandTags,
+	bool cullToCamera
+) const
 {
 	struct QueuedBuild {
 		float3 pos;
@@ -667,10 +672,14 @@ void CommandDrawer::DrawQuedBuildingSquares(const std::vector<const CBuilderCAI*
 	static std::vector<QueuedBuild> builds;
 	builds.clear();
 
-	const auto parseInto = [&builds](const std::vector<const CBuilderCAI*>& cais, const SColor& color) {
+	const SColor cancelColor(cmdColors.buildBoxCancel);
+
+	const auto parseInto = [&](const std::vector<const CBuilderCAI*>& cais, const SColor& color) {
 		for (const CBuilderCAI* cai : cais) {
 			const CCommandQueue& commandQue = cai->commandQue;
 			const auto& buildOptions = cai->buildOptions;
+			const auto cancelledIt = cancelledCommandTags.find(cai->owner->id);
+			const bool hasCancelled = (cancelledIt != cancelledCommandTags.end());
 
 			for (const Command& c: commandQue) {
 				if (buildOptions.find(c.GetID()) == buildOptions.end())
@@ -688,10 +697,11 @@ void CommandDrawer::DrawQuedBuildingSquares(const std::vector<const CBuilderCAI*
 				const float radius = math::sqrt(xsize * xsize + zsize * zsize);
 
 				// cull build positions that are not visible
-				if (!camera->InView(bi.pos, radius))
+				if (cullToCamera && !camera->InView(bi.pos, radius))
 					continue;
 
-				builds.push_back({ bi.pos, xsize, zsize, (bi.pos.y < 0.0f), color });
+				const bool cancelled = hasCancelled && cancelledIt->second.contains(c.GetTag());
+				builds.push_back({ bi.pos, xsize, zsize, (bi.pos.y < 0.0f), cancelled ? cancelColor : color });
 			}
 		}
 	};
@@ -752,4 +762,3 @@ void CommandDrawer::DrawQuedBuildingSquares(const std::vector<const CBuilderCAI*
 	rb.DrawElements(GL_LINES);
 	shader.Disable();
 }
-

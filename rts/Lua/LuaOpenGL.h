@@ -154,20 +154,26 @@ class LuaOpenGL {
 		static std::unordered_map<GLenum, std::string> fixedStateEnumToString;
 		static std::string fixedStateEnumToStringUnk;
 
-		// gl.CreateQuery object: a full userdata with the "OcclusionQuery"
-		// metatable, owned by Lua like FBOs and RBOs. Its __gc deletes the GL
-		// query unless gl.DeleteQuery already did (id is 0 then).
+		// gl.CreateQuery object: a full userdata with the "OcclusionQuery" metatable,
+		// owned by Lua like FBOs and RBOs. Its __gc deletes the GL query unless
+		// gl.DeleteQuery already did (id is 0 then).
 		struct OcclusionQuery {
 			unsigned int id;
+			unsigned int target; // GL_SAMPLES_PASSED, GL_TIME_ELAPSED, GL_TIMESTAMP, ...
 		};
 
-	private:
+		// the query inside gl.RunQuery, nullptr outside; RunQuery cannot nest
+		inline static const OcclusionQuery* runningQuery = nullptr;
+
 		static void CreateQueryMetatable(lua_State* L);
 		static int QueryGC(lua_State* L);
-		static OcclusionQuery* GetOcclusionQuery(lua_State* L, int index, const char* errorMsg);
+		static OcclusionQuery* ParseQuery(lua_State* L, int index, const char* caller);
 
+	private:
 		static void CheckDrawingEnabled(lua_State* L, const char* caller);
 		static void CondWarnDeprecatedGL(lua_State* L, const char* caller);
+		static void WarnDeprecatedOnce(lua_State* L, const std::string& what, const std::string& message);
+		static GLint ResolveLegacyTexFormat(lua_State* L, GLint format);
 		static void NotImplementedError(lua_State* L, const char* caller);
 
 	private:
@@ -344,7 +350,9 @@ class LuaOpenGL {
 		static int CreateQuery(lua_State* L);
 		static int DeleteQuery(lua_State* L);
 		static int RunQuery(lua_State* L);
+		static int QueryCounter(lua_State* L);
 		static int GetQuery(lua_State* L);
+		static int GetQueryDelta(lua_State* L);
 
 		static int GetGlobalTexNames(lua_State* L);
 		static int GetGlobalTexCoords(lua_State* L);
