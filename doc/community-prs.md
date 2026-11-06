@@ -2,6 +2,23 @@
 
 Open upstream PRs reviewed for this fork, so later passes only look at new ones. Policy: the "What gets in" section of the [README](../README.markdown). The carried PRs are the `Merge PR #N` commits on `master` (`git log --first-parent --grep '^Merge PR'`). This log records review rounds and what was skipped.
 
+## 2026-11-06
+
+Reviewed: open, non-draft PRs updated since 2026-10-25 that weren't reviewed in the last round, for crash, hang, memory-safety and performance fixes only.
+
+Merged, bug fixes: #3694, #3691, #3671, #3660, #3650, #3631.
+
+Skipped:
+
+| PR | Why |
+|---|---|
+| #3695 | Stacked on the unreviewed #3553; also changes VBO padding handling |
+| #3711, #3713, #3712, #3699, #3644, #3630, #3627, #3624, #3609, #3655, #3659 | Synced behaviour changes: they change replay results |
+| #3701 | An assert only; no effect in our build type |
+| #3700 | Headless load time only |
+
+The other PRs updated in this window are features, docs/CI or macOS-only, or weren't assessed this round.
+
 ## 2026-10-25
 
 Reviewed: open, non-draft PRs updated since 2026-10-10 that weren't reviewed in the last round, skipping features, docs/CI and macOS-only work. lemon renders on an RTX 4090 with the NVIDIA driver, so work aimed at Mesa, Zink or KosmicKrisp was judged by its effect there.

@@ -4,6 +4,12 @@ Headline measurements over time. Raw per-cell data lives in `tools/workbench/res
 
 Engines: **base** = upstream `e9d1993` + workbench only (fork branch `workbench-base`); **dev** = fork `master` (performance patches + reviewed community PRs + workbench); **nosim** = dev with our simulation performance patches reverted.
 
+## 2026-11-06: upstream merge and stability PR batch (engine to upstream 2026-11-06, game to 2026-11-06)
+
+Merged engine (`85a2b5f`) on the merged game. Logic suite 756/756, GUI smoke 27/27, big_battle, mass_move_5000 and lategame_load all pass, game Lua specs 2043 passed with 0 failures and 1 pending. C++ tests 34/35 on the merge before the PR batch (`testUnitSync` fails on "duplicate base content", the known install-dir issue) and not re-run after it. `sync_repro --seed 1234 --spectate`, 2 reps: same final checksum (`688a3b34`, frame 7127). Upstream's merged sim fixes change results on purpose, so this isn't comparable with earlier digests.
+
+Headless, `--sim-speed max`, 1 repetition, mean sim time per frame (ms): big_battle 6.32, lategame_load start 14.73, steady 12.13, mass_move_5000 10.36. In line with or below the 2026-10-11 numbers, but one repetition with no interleaved baseline is not a comparison.
+
 ## 2026-10-11: community PR batch timed; COB slot store re-measured
 
 Idle machine, headless, `--sim-speed max`, 3 interleaved repetitions, mean sim time per frame (ms), median of the repetitions (range in brackets).
