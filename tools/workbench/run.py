@@ -18,10 +18,10 @@ Cell = collections.namedtuple("Cell", "engine exe profile rep")
 
 # named scenario sets; --only overrides
 SUITES = {
-    "smoke": "api_selftest,lua_api_regressions,render_baseline,mass_move_500,weapon_range,ui_lowfps",   # ~2 min
-    "standard": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range,ui_lowfps,ui_lategame,unit_movement,ship_movement,unit_behaviours,air_attack,engine_regressions",
+    "smoke": "api_selftest,lua_api_regressions,render_baseline,heightmap_texture,mass_move_500,weapon_range,ui_lowfps",   # ~2 min
+    "standard": "api_selftest,lua_api_regressions,render_baseline,heightmap_texture,mass_move_*,big_battle,weapon_range,ui_lowfps,ui_lategame,unit_movement,ship_movement,unit_behaviours,air_attack,engine_regressions",
     "determinism": "sync_repro",  # use with --spectate --seed N
-    "full": "api_selftest,lua_api_regressions,render_baseline,mass_move_*,big_battle,weapon_range_all,ui_lowfps,ui_lategame,ui_lategame_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack,engine_regressions",  # hours
+    "full": "api_selftest,lua_api_regressions,render_baseline,heightmap_texture,mass_move_*,big_battle,weapon_range_all,ui_lowfps,ui_lategame,ui_lategame_lowfps,unit_movement,ship_movement,unit_behaviours,air_attack,engine_regressions",  # hours
     "render": "render_baseline,mass_move_500",  # graphics cost per settings profile
     # every game-logic check, at max sim speed (~1 min on lemon)
     "logic": "unit_behaviours,unit_movement,ship_movement,air_attack,weapon_range_all,engine_regressions",

@@ -119,6 +119,7 @@ list(APPEND FILES
 	workbench/scenarios/api_selftest.lua
 	workbench/scenarios/lua_api_regressions.lua
 	workbench/scenarios/render_baseline.lua
+	workbench/scenarios/heightmap_texture.lua
 	LuaHandler/config.lua
 	LuaHandler/doc/gpl-2.0.txt
 	LuaHandler/doc/changelog.txt

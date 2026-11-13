@@ -129,6 +129,7 @@ local frames = 0
 -- where os does not exist, so nothing here may run at load time beyond plain values.
 local nextCallId
 local gameFrameQueue = {}
+local drawQueue = {}
 
 local function send(callId, sc, fnName, ...)
 	local parts = { MSG_PREFIX .. callId, sc.name .. "." .. fnName }
@@ -205,6 +206,13 @@ local function makeCtx(sc)
 		gameFrameQueue[#gameFrameQueue + 1] = function() fn(); done = true end
 		ctx.waitUntil(function() return done end, 30)
 	end
+	-- runs fn from the next draw callin (DrawGenesis), where GL calls such as
+	-- gl.RenderToTexture and gl.ReadPixels are allowed; waits until fn has run
+	function ctx.atNextDraw(fn)
+		local done = false
+		drawQueue[#drawQueue + 1] = function() fn(); done = true end
+		ctx.waitUntil(function() return done end, 30)
+	end
 	function ctx.log(msg)
 		Spring.Echo("[Workbench] " .. sc.name .. ": " .. tostring(msg))
 	end
@@ -277,6 +285,17 @@ function H.GameFrame()
 	for _, fn in ipairs(q) do
 		local ok, err = pcall(fn)
 		if not ok then Spring.Log("Workbench", LOG.ERROR, "atNextGameFrame: " .. tostring(err)) end
+	end
+end
+
+-- call from the widget's DrawGenesis callin
+function H.Draw()
+	if #drawQueue == 0 then return end
+	local q = drawQueue
+	drawQueue = {}
+	for _, fn in ipairs(q) do
+		local ok, err = pcall(fn)
+		if not ok then Spring.Log("Workbench", LOG.ERROR, "atNextDraw: " .. tostring(err)) end
 	end
 end
 
