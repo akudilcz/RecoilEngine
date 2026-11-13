@@ -39,13 +39,21 @@ return {
 	synced = {
 		-- height changes reach the unsynced heightmap (and the texture) only where the
 		-- local player's ally team has LOS (CReadMap::HeightMapUpdateLOSCheck)
+		-- returns the previous setting (1/0), which the scenario restores
 		globalLos = function(allyTeam, enabled)
+			local was = Spring.GetGlobalLos(allyTeam)
 			Spring.SetGlobalLos(allyTeam, enabled == 1)
-			return 0
+			return was and 1 or 0
 		end,
 		level = function(height)
 			local ox, oz = patchOrigin()
 			Spring.LevelHeightMap(ox * 8, oz * 8, (ox + SIDE) * 8, (oz + SIDE) * 8, height)
+			return 0
+		end,
+		-- back to the map's own heights, so later scenarios see the original terrain
+		revert = function()
+			local ox, oz = patchOrigin()
+			Spring.RevertHeightMap(ox * 8, oz * 8, (ox + SIDE) * 8, (oz + SIDE) * 8, 1.0)
 			return 0
 		end,
 		-- RECTS_PER_FRAME raises/lowers of random small rectangles inside the patch
@@ -143,14 +151,25 @@ return {
 		end
 
 		local allyTeam = Spring.GetMyAllyTeamID()
-		local _, err = ctx.call("globalLos", allyTeam, 1)
+		local losWas, err = ctx.call("globalLos", allyTeam, 1)
 		if err then
 			ctx.check("globalLos", false, err)
 			return
 		end
+		local function cleanUp()
+			gl.DeleteTexture(fbo)
+			gl.DeleteShader(shader)
+			ctx.call("revert")
+			ctx.call("globalLos", allyTeam, losWas)
+			-- the map's height bounds refresh over one paced cycle (CReadMap::UpdateHeightBounds,
+			-- GAME_SPEED frames); until then they still hold the deformed extremes, which
+			-- camera fitting and unit culling in the next scenario would see
+			ctx.waitSimFrames(2 * Game.gameSpeed)
+		end
 		_, err = ctx.call("level", 100)
 		if err then
 			ctx.check("level", false, err)
+			cleanUp()
 			return
 		end
 		settle()
@@ -164,6 +183,7 @@ return {
 				_, err = ctx.call("burst", round * 100000 + f) -- one burst per sim frame
 				if err then
 					ctx.check("burst", false, err)
+					cleanUp()
 					return
 				end
 			end
@@ -177,9 +197,6 @@ return {
 		ctx.check("matches_after_deformation", totalBad == 0,
 			"texels differing per round: " .. table.concat(rounds, ",") .. " of " .. n * n .. "; last round " .. tostring(detail))
 
-		gl.DeleteTexture(fbo)
-		gl.DeleteShader(shader)
-		ctx.call("level", 100)
-		ctx.call("globalLos", allyTeam, 0)
+		cleanUp()
 	end,
 }

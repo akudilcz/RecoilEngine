@@ -2,6 +2,29 @@
 
 Open upstream PRs reviewed for this fork, so later passes only look at new ones. Policy: the "What gets in" section of the [README](../README.markdown). The carried PRs are the `Merge PR #N` commits on `master` (`git log --first-parent --grep '^Merge PR'`). This log records review rounds and what was skipped.
 
+## 2026-11-13
+
+Reviewed: open, non-draft PRs updated since 2026-11-06. Carried PRs updated in that window (#3333, #3428, #3438, #3467, #3521, #3522, #3551, #3660) haven't changed materially; #3699, #3572, #3439, #3431 and #3343 were skipped before and are unchanged in substance.
+
+Merged, performance: #3726 (no zero-fill of the 512 MB texture pool at startup), #3727 (attack range circles in one draw call; BAR draws them with alpha 0, so they are now skipped).
+
+Skipped:
+
+| PR | Why |
+|---|---|
+| #3743, #3737, #3734, #3732 | Synced behaviour changes: speed-0 move rate, builder reclaim, terraform terrain updates; they change replay results |
+| #3720 | Lua table semantics for nil inserts: changes `pairs` order in synced Lua |
+| #3422 | QTPFS rework with a background task, unreviewed; no measurable gain against run-to-run spread |
+| #2145 | Synced path search change |
+| #3744 | No effect for BAR, which ships its own unit script framework |
+| #3728 | Synced-read Lua API fix BAR doesn't call; changes results for content that does |
+| #3730 | Menu AI listing for mutators; no effect for BAR |
+| #3735 | Profiler only; we already register both QTPFS timers (would conflict) |
+| #3220 | Makes startup parser errors fatal; no runtime benefit |
+| #3010 | Network buffering; author says catch-up is "very broken" with it |
+| #3696, #3736, #3731, #3715, #3708, #3471, #3330, #3286 | Features |
+| #3742, #3740, #3729, #3706 | Docs or CI only |
+
 ## 2026-11-06
 
 Reviewed: open, non-draft PRs updated since 2026-10-25 that weren't reviewed in the last round, for crash, hang, memory-safety and performance fixes only.
