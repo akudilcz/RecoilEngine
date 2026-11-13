@@ -1282,6 +1282,7 @@ bool SpringApp::MainEventHandler(const SDL_Event& event)
 					LOG("[SpringApp::%s][SDL_WINDOWEVENT_DISPLAY_CHANGED] to display %d\n", __func__, event.window.data1);
 					// try to reinit GL context
 					globalRendering->MakeCurrentContext(false);
+					globalRendering->UpdateDisplayPeriod();
 				} break;
 
 				case SDL_WINDOWEVENT_CLOSE: {

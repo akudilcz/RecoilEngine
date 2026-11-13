@@ -103,7 +103,7 @@ void CommandDrawer::DrawCommands(const CCommandAI* cai, int queueDrawDepth) cons
 
 	lineDrawer.StartPath(owner->GetObjDrawMidPos(), cmdColors.start);
 
-	if (owner->selfDCountdown != 0)
+	if (owner->selfDTargetFrame != 0)
 		lineDrawer.DrawIconAtLastPos(CMD_SELFD);
 
 	for (auto ci = commandQue.begin(); ci != commandQue.end(); ++ci) {
@@ -160,7 +160,7 @@ void CommandDrawer::DrawAirCAICommands(const CAirCAI* cai, int queueDrawDepth) c
 
 	lineDrawer.StartPath(owner->GetObjDrawMidPos(), cmdColors.start);
 
-	if (owner->selfDCountdown != 0)
+	if (owner->selfDTargetFrame != 0)
 		lineDrawer.DrawIconAtLastPos(CMD_SELFD);
 
 	for (auto ci = commandQue.begin(); ci != commandQue.end(); ++ci) {
@@ -245,7 +245,7 @@ void CommandDrawer::DrawBuilderCAICommands(const CBuilderCAI* cai, int queueDraw
 
 	lineDrawer.StartPath(owner->GetObjDrawMidPos(), cmdColors.start);
 
-	if (owner->selfDCountdown != 0)
+	if (owner->selfDTargetFrame != 0)
 		lineDrawer.DrawIconAtLastPos(CMD_SELFD);
 
 	for (auto ci = commandQue.begin(); ci != commandQue.end(); ++ci) {
@@ -414,7 +414,7 @@ void CommandDrawer::DrawFactoryCAICommands(const CFactoryCAI* cai, int queueDraw
 
 	lineDrawer.StartPath(owner->GetObjDrawMidPos(), cmdColors.start);
 
-	if (owner->selfDCountdown != 0)
+	if (owner->selfDTargetFrame != 0)
 		lineDrawer.DrawIconAtLastPos(CMD_SELFD);
 
 	if (!commandQue.empty() && (commandQue.front().GetID() == CMD_WAIT))
@@ -508,7 +508,7 @@ void CommandDrawer::DrawMobileCAICommands(const CMobileCAI* cai, int queueDrawDe
 
 	lineDrawer.StartPath(owner->GetObjDrawMidPos(), cmdColors.start);
 
-	if (owner->selfDCountdown != 0)
+	if (owner->selfDTargetFrame != 0)
 		lineDrawer.DrawIconAtLastPos(CMD_SELFD);
 
 	for (auto ci = commandQue.begin(); ci != commandQue.end(); ++ci) {
